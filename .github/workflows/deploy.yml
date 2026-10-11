@@ -1,0 +1,45 @@
+name: Pubblica Bilancio Casa
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Bilancio_Casa_PWA_v0_2_0.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scarica il repository
+        uses: actions/checkout@v4
+
+      - name: Configura GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Estrai il progetto PWA
+        run: |
+          test -f Bilancio_Casa_PWA_v0_2_0.zip
+          mkdir public extracted
+          unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
+          cp -a extracted/bilancio-casa-pwa/. public/
+
+      - name: Prepara il sito
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Pubblica
+        id: deployment
+        uses: actions/deploy-pages@v4
