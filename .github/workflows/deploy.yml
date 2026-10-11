@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Bilancio_Casa_PWA_v0_2_0.zip'
+      - 'Bilancio_Casa_PWA_v0_2_0.zip.b64.ready'
   workflow_dispatch:
 
 permissions:
@@ -28,9 +28,14 @@ jobs:
       - name: Configura GitHub Pages
         uses: actions/configure-pages@v5
 
+      - name: Ricostruisce e verifica il pacchetto
+        run: |
+          cat Bilancio_Casa_PWA_v0_2_0.zip.b64.part0* | base64 --decode > Bilancio_Casa_PWA_v0_2_0.zip
+          echo "394b3317a48742bfed152e9ec1bd00e9b339139fe12a1092a76461a5b43ca9f6  Bilancio_Casa_PWA_v0_2_0.zip" | sha256sum --check
+          unzip -tq Bilancio_Casa_PWA_v0_2_0.zip
+
       - name: Estrai il progetto PWA
         run: |
-          test -f Bilancio_Casa_PWA_v0_2_0.zip
           mkdir public extracted
           unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
           cp -a extracted/bilancio-casa-pwa/. public/
