@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'Bilancio_Casa_PWA_v0_2_0.zip.b64.ready'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -38,6 +39,109 @@ jobs:
         run: |
           mkdir public extracted
           unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
+
+      - name: Corregge conferma email
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path("extracted/bilancio-casa-pwa")
+          app_path = root / "app.js"
+          app = app_path.read_text(encoding="utf-8")
+          start = app.index("  async function handleAuthSubmit(event) {")
+          end = app.index("  function switchAuthMode(mode) {", start)
+          replacement = """  function appRedirectUrl() {
+              // Usa la radice della PWA corrente, non il Site URL predefinito di Supabase (che può essere localhost).
+              const target = new URL('./', window.location.href);
+              target.search = '';
+              target.hash = '';
+              return target.href;
+            }
+
+            async function handleAuthSubmit(event) {
+              event.preventDefault();
+              const email = $('authEmail').value.trim();
+              const password = $('authPassword').value;
+              const button = $('authSubmit');
+              setButtonBusy(button, true);
+              setAuthMessage('');
+              try {
+                if (authMode === 'signup') {
+                  const { data, error } = await db.auth.signUp({
+                    email,
+                    password,
+                    options: { emailRedirectTo: appRedirectUrl() }
+                  });
+                  if (error) throw error;
+                  if (data.session) {
+                    currentUser = data.user;
+                    await afterLogin();
+                  } else {
+                    setAuthMessage('Registrazione avviata. Se l’email non arriva, controlla anche Spam e usa “Invia di nuovo l’email di conferma”.');
+                  }
+                } else {
+                  const { data, error } = await db.auth.signInWithPassword({ email, password });
+                  if (error) throw error;
+                  currentUser = data.user;
+                  await afterLogin();
+                }
+              } catch (error) {
+                setAuthMessage(error?.message || 'Non è stato possibile completare l’accesso.', true);
+              } finally {
+                setButtonBusy(button, false);
+              }
+            }
+
+            async function resendConfirmationEmail() {
+              const email = $('authEmail').value.trim();
+              if (!email) {
+                setAuthMessage('Inserisci prima la tua email nel campo qui sopra.', true);
+                $('authEmail').focus();
+                return;
+              }
+              const button = $('authResendBtn');
+              setButtonBusy(button, true, 'Invio in corso…');
+              setAuthMessage('');
+              try {
+                const { error } = await db.auth.resend({
+                  type: 'signup',
+                  email,
+                  options: { emailRedirectTo: appRedirectUrl() }
+                });
+                if (error) throw error;
+                setAuthMessage('Richiesta inviata. Controlla Posta in arrivo e Spam; il link porterà a Bilancio Casa.');
+              } catch (error) {
+                setAuthMessage(error?.message || 'Non è stato possibile richiedere una nuova email di conferma.', true);
+              } finally {
+                setButtonBusy(button, false);
+              }
+            }
+
+          """
+          app = app[:start] + replacement + app[end:]
+          binding = "    $('authForm').addEventListener('submit', handleAuthSubmit);"
+          if "authResendBtn" not in app:
+              if binding not in app:
+                  raise SystemExit("Associazione del modulo email non trovata")
+              app = app.replace(binding, binding + "\n    $('authResendBtn').addEventListener('click', resendConfirmationEmail);", 1)
+          if "emailRedirectTo: appRedirectUrl()" not in app:
+              raise SystemExit("Redirect email non inserito")
+          app_path.write_text(app, encoding="utf-8")
+
+          html_path = root / "index.html"
+          html = html_path.read_text(encoding="utf-8")
+          marker = '<p id="authMessage" class="small-note" role="status" aria-live="polite"></p>'
+          if 'id="authResendBtn"' not in html:
+              if marker not in html:
+                  raise SystemExit("Area messaggi di autenticazione non trovata")
+              html = html.replace(marker, marker + '\n      <button id="authResendBtn" class="text-button" type="button">Invia di nuovo l’email di conferma</button>', 1)
+          html = html.replace('Bilancio Casa · versione 0.2.0 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.1 · sincronizzazione cloud protetta')
+          html_path.write_text(html, encoding="utf-8")
+
+          sw_path = root / "service-worker.js"
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.0", "bilancio-casa-shell-v0.2.1")
+          sw_path.write_text(sw, encoding="utf-8")
+          PY
           cp -a extracted/bilancio-casa-pwa/. public/
 
       - name: Prepara il sito
