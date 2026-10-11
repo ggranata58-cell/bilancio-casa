@@ -120,7 +120,7 @@ jobs:
           """
           app = app[:start] + replacement + app[end:]
           binding = "    $('authForm').addEventListener('submit', handleAuthSubmit);"
-          if "authResendBtn" not in app:
+          if "$('authResendBtn').addEventListener" not in app:
               if binding not in app:
                   raise SystemExit("Associazione del modulo email non trovata")
               app = app.replace(binding, binding + "\n    $('authResendBtn').addEventListener('click', resendConfirmationEmail);", 1)
