@@ -194,7 +194,7 @@ jobs:
           if 'Cerca nei movimenti' not in html:
               if '</body>' not in html:
                   raise SystemExit("Tag body non trovato per i controlli archivio")
-              html = html.replace('</body>', archive_script + '\\n</body>', 1)
+              html = html.replace('</body>', archive_script + '\n</body>', 1)
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
