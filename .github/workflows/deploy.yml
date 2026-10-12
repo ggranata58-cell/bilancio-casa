@@ -346,15 +346,24 @@ jobs:
               return Number.isFinite(n) ? n : NaN;
             };
             function headerFor(t) {
-              return [...t.querySelectorAll('tr')].find(row => {
+              const rows = [...t.querySelectorAll('tr')];
+              const score = row => {
                 const h = [...row.cells].map(x => norm(x.textContent));
-                return h.some(x => x === 'data' || x.startsWith('data ')) &&
-                  h.some(x => x.includes('concetto')) &&
-                  h.some(x => x === 'saldo' || x.startsWith('saldo '));
-              }) || null;
+                return Number(h.some(x => x === 'data' || x.startsWith('data '))) +
+                  Number(h.some(x => x.includes('concetto'))) +
+                  Number(h.some(x => x.includes('importo'))) +
+                  Number(h.some(x => x === 'saldo' || x.startsWith('saldo ')));
+              };
+              return rows.find(row => score(row) >= 3) ||
+                rows.find(row => score(row) >= 2) || null;
             }
             function findTable() {
-              return [...document.querySelectorAll('table')].find(t => !!headerFor(t));
+              return [...document.querySelectorAll('table')].find(t => {
+                const labels = [...t.querySelectorAll('th,td')].slice(0, 24).map(x => norm(x.textContent));
+                return labels.some(x => x.includes('data')) &&
+                  labels.some(x => x.includes('concetto')) &&
+                  labels.some(x => x.includes('saldo'));
+              }) || null;
             }
             function setup() {
               if (document.getElementById('balanceConsistencyPanel')) return;
