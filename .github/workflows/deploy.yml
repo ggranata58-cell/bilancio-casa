@@ -270,8 +270,8 @@ jobs:
           if "async function createFullBackup()" not in app:
               init_marker = "  async function initialize() {"
               if init_marker not in app: raise SystemExit("Punto di inserimento backup non trovato")
-              app = app.replace(init_marker, backup_patch + "\\n" + init_marker, 1)
-          app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\\n\\n  async function initialize() {", 1)
+              app = app.replace(init_marker, backup_patch + "\n" + init_marker, 1)
+          app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
           app_path.write_text(app, encoding="utf-8")
 
