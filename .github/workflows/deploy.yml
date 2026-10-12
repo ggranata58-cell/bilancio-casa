@@ -403,6 +403,26 @@ jobs:
               }
             });
             function unlock() { unlocked = true; overlay.style.display = 'none'; $('securityPin').value = ''; }
+            // Dopo un'uscita volontaria, al prossimo avvio chiedi le credenziali dell'account,
+            // non anche il PIN locale. Il PIN resta attivo per le normali riaperture.
+            const LOGOUT_BYPASS_KEY = 'bilancioCasa.skipPinAfterLogout.v1';
+            document.addEventListener('click', event => {
+              const target = event.target && event.target.closest ? event.target.closest('button, a, [role="button"]') : null;
+              if (!target) return;
+              const label = (target.innerText || target.textContent || '').trim().toLocaleLowerCase();
+              if (label === 'esci' || label === 'logout' || label === 'sign out') {
+                try { localStorage.setItem(LOGOUT_BYPASS_KEY, '1'); } catch (_) {}
+              }
+            }, true);
+            let skipPinOnce = false;
+            try {
+              skipPinOnce = localStorage.getItem(LOGOUT_BYPASS_KEY) === '1';
+              if (skipPinOnce) localStorage.removeItem(LOGOUT_BYPASS_KEY);
+            } catch (_) {}
+            if (skipPinOnce) {
+              unlocked = true;
+              overlay.style.display = 'none';
+            }
             // Sul PC un semplice cambio di scheda non deve richiedere di nuovo il PIN.
             // Sui telefoni manteniamo il blocco quando l'app passa in secondo piano.
             const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
@@ -437,7 +457,7 @@ jobs:
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.9", "bilancio-casa-shell-v0.2.10")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.9", "bilancio-casa-shell-v0.2.11")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
