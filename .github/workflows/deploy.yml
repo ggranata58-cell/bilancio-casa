@@ -48,6 +48,11 @@ jobs:
           grep -n -i -E 'render.*mov|mov.*render|Archivio Movimenti|movimenti registrati|createElement\(.div.|innerHTML' extracted/bilancio-casa-pwa/app.js | head -100 || true
           echo '--- CARICAMENTO E SINCRONIZZAZIONE DATI ---'
           grep -n -i -E 'async function|function .*load|select\(|from\(|afterLogin|movements\s*=|renderDashboard\(' extracted/bilancio-casa-pwa/app.js | head -120 || true
+          echo '--- CAMPI IMPOSTAZIONI E STORICO ---'
+          sed -n '160,245p' extracted/bilancio-casa-pwa/app.js
+          sed -n '500,575p' extracted/bilancio-casa-pwa/app.js
+          echo '--- PANNELLO IMPOSTAZIONI HTML ---'
+          grep -n -i -B 12 -A 28 'Backup dei dati' extracted/bilancio-casa-pwa/index.html || true
           echo '--- CODICE CARICAMENTO E RENDER ---'
           sed -n '250,460p' extracted/bilancio-casa-pwa/app.js
       - name: Corregge conferma email
