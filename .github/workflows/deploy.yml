@@ -347,7 +347,8 @@ jobs:
             };
             function findTable() {
               return [...document.querySelectorAll('table')].find(t => {
-                const h = [...t.querySelectorAll('thead th, thead td')].map(x => norm(x.textContent)).join('|');
+                const headerRow = t.tHead?.rows?.[0] || t.rows?.[0];
+                const h = [...(headerRow?.cells || [])].map(x => norm(x.textContent)).join('|');
                 return h.includes('data') && h.includes('concetto') && h.includes('saldo');
               });
             }
@@ -360,7 +361,8 @@ jobs:
               panel.innerHTML = '<strong>Controllo coerenza del saldo</strong><p style="margin:6px 0 10px;font-size:.92em">Verifica che il saldo di ogni movimento sia coerente con quello del movimento precedente. Non modifica i dati.</p><button id="balanceConsistencyRun" type="button" style="padding:8px 12px;border:1px solid #94a3b8;border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer">Controlla saldo</button><p id="balanceConsistencyResult" role="status" aria-live="polite" style="margin:10px 0 0"></p>';
               table.parentNode.insertBefore(panel, table);
               panel.querySelector('button').addEventListener('click', () => {
-                const headers = [...table.querySelectorAll('thead th, thead td')].map(x => norm(x.textContent));
+                const headerRow = table.tHead?.rows?.[0] || table.rows?.[0];
+                const headers = [...(headerRow?.cells || [])].map(x => norm(x.textContent));
                 const amountIndex = headers.findIndex(h => h.includes('importo') && (h.includes('+/-') || h.includes('+ / -') || h.includes('segno')));
                 const balanceIndex = headers.findIndex(h => h === 'saldo' || h.startsWith('saldo '));
                 const rows = [...(table.tBodies[0]?.rows || [])].filter(r => r.cells.length > Math.max(amountIndex, balanceIndex));
