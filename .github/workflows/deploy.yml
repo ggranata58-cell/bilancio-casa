@@ -433,8 +433,10 @@ jobs:
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once:true}); else start();
           })();
           </script>"""
-          if 'id="balanceConsistencyPanel"' not in html:
-              html = html.replace('</body>', consistency_script + '\\n</body>', 1)
+          # Il pacchetto sorgente viene estratto da zero a ogni deploy:
+          # inseriamo sempre lo script di controllo, senza usare come guardia
+          # l'ID del pannello che è già citato all'interno dello script stesso.
+          html = html.replace('</body>', consistency_script + '\\n</body>', 1)
 
           security_script = r"""<script>
           (() => {
