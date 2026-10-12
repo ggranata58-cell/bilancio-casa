@@ -340,7 +340,7 @@ jobs:
                 $('securityError').textContent = 'Protezione non disponibile in questo browser. Ricarica l’app e riprova.';
               } finally {
                 busy = false;
-                if (!$('securitySubmit').disabled) $('securitySubmit').disabled = false;
+                if (failures < 5) $('securitySubmit').disabled = false;
               }
             });
             function unlock() { unlocked = true; overlay.style.display = 'none'; $('securityPin').value = ''; }
