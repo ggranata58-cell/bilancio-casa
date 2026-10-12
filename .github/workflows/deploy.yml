@@ -39,21 +39,7 @@ jobs:
         run: |
           mkdir public extracted
           unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
-
-      - name: Diagnostica ordinamento movimenti
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path("extracted/bilancio-casa-pwa/app.js")
-          lines = p.read_text(encoding="utf-8").splitlines()
-          terms = ("sort(", "movimenti", "movement", "dataMovimento", "localeCompare", "orderBy")
-          hits = [i for i, line in enumerate(lines) if any(t.lower() in line.lower() for t in terms)]
-          for i in hits:
-              print(f"--- app.js lines {max(1, i-3)}-{min(len(lines), i+4)} ---")
-              for j in range(max(0, i-3), min(len(lines), i+4)):
-                  print(f"{j+1}: {lines[j]}")
-          PY
-
+     
       - name: Corregge conferma email
         run: |
           python - <<'PY'
@@ -133,6 +119,13 @@ jobs:
 
           """
           app = app[:start] + replacement + app[end:]
+          
+          old_sort = "const rows = [...movements].filter(inAccountingPeriod).sort(sortLatest);"
+          new_sort = "const rows = [...movements].filter(inAccountingPeriod).sort((a, b) => a.movement_date.localeCompare(b.movement_date) || String(a.created_at || '').localeCompare(String(b.created_at || '')));"
+          if old_sort not in app:
+              raise SystemExit("Ordinamento della tabella movimenti non trovato")
+          app = app.replace(old_sort, new_sort, 1)
+
           binding = "    $('authForm').addEventListener('submit', handleAuthSubmit);"
           if "$('authResendBtn').addEventListener" not in app:
               if binding not in app:
@@ -150,11 +143,11 @@ jobs:
               if marker not in html:
                   raise SystemExit("Area messaggi di autenticazione non trovata")
               html = html.replace(marker, marker + '\n      <button id="authResendBtn" class="text-button" type="button">Invia di nuovo l’email di conferma</button>', 1)
-          html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.1 · sincronizzazione cloud protetta')
+          html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.3 · sincronizzazione cloud protetta')
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.1")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.3")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
