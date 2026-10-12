@@ -274,36 +274,36 @@ jobs:
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
           balance_function = r"""  function renderBalanceCheck() {
-    const rows = [...movements]
-      .filter(inAccountingPeriod)
-      .sort((a, b) => a.movement_date.localeCompare(b.movement_date) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
-    const income = rows.filter(m => m.movement_type === 'Entrata').reduce((sum, m) => sum + Number(m.amount || 0), 0);
-    const expenses = rows.filter(m => m.movement_type === 'Uscita').reduce((sum, m) => sum + Number(m.amount || 0), 0);
-    let balance = Number(settings.opening_balance) || 0;
-    const summary = $('balanceCheckSummary');
-    if (!summary) return;
-    summary.innerHTML = [
-      ['Saldo iniziale', money(balance)],
-      ['Entrate', money(income)],
-      ['Uscite', money(expenses)],
-      ['Saldo finale calcolato', money(balance + income - expenses)]
-    ].map(([label, value]) => `<div class="balance-check-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
-    const body = $('balanceCheckRows');
-    if (!body) return;
-    if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="5" class="table-empty">Nessun movimento nel periodo contabile.</td></tr>';
-      return;
-    }
-    body.innerHTML = rows.map(m => {
-      const previous = balance;
-      const amount = signed(m);
-      balance = Math.round((balance + amount + Number.EPSILON) * 100) / 100;
-      return `<tr><td>${escapeHtml(fmtDate(m.movement_date))}</td><td><strong>${escapeHtml(m.concept)}</strong><div class="small-note">${escapeHtml(m.category)}</div></td><td class="money">${escapeHtml(money(previous))}</td><td class="money ${amount >= 0 ? 'amount-in' : 'amount-out'}">${amount >= 0 ? '+' : '−'} ${escapeHtml(money(Math.abs(amount)))}</td><td class="money"><strong>${escapeHtml(money(balance))}</strong></td></tr>`;
-    }).join('');
-  }
-
-"""
-          if ("function renderBalanceCheck()" not in app) {
+              const rows = [...movements]
+                .filter(inAccountingPeriod)
+                .sort((a, b) => a.movement_date.localeCompare(b.movement_date) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
+              const income = rows.filter(m => m.movement_type === 'Entrata').reduce((sum, m) => sum + Number(m.amount || 0), 0);
+              const expenses = rows.filter(m => m.movement_type === 'Uscita').reduce((sum, m) => sum + Number(m.amount || 0), 0);
+              let balance = Number(settings.opening_balance) || 0;
+              const summary = $('balanceCheckSummary');
+              if (!summary) return;
+              summary.innerHTML = [
+                ['Saldo iniziale', money(balance)],
+                ['Entrate', money(income)],
+                ['Uscite', money(expenses)],
+                ['Saldo finale calcolato', money(balance + income - expenses)]
+              ].map(([label, value]) => `<div class="balance-check-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+              const body = $('balanceCheckRows');
+              if (!body) return;
+              if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="5" class="table-empty">Nessun movimento nel periodo contabile.</td></tr>';
+                return;
+              }
+              body.innerHTML = rows.map(m => {
+                const previous = balance;
+                const amount = signed(m);
+                balance = Math.round((balance + amount + Number.EPSILON) * 100) / 100;
+                return `<tr><td>${escapeHtml(fmtDate(m.movement_date))}</td><td><strong>${escapeHtml(m.concept)}</strong><div class="small-note">${escapeHtml(m.category)}</div></td><td class="money">${escapeHtml(money(previous))}</td><td class="money ${amount >= 0 ? 'amount-in' : 'amount-out'}">${amount >= 0 ? '+' : '−'} ${escapeHtml(money(Math.abs(amount)))}</td><td class="money"><strong>${escapeHtml(money(balance))}</strong></td></tr>`;
+              }).join('');
+            }
+          
+          """
+                    if ("function renderBalanceCheck()" not in app) {
             const_marker = "  function renderAllMovements() {"
             if const_marker not in app:
               raise SystemExit("Funzione renderAllMovements non trovata: controllo saldo non inserito")
