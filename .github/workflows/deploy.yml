@@ -403,14 +403,19 @@ jobs:
               }
             });
             function unlock() { unlocked = true; overlay.style.display = 'none'; $('securityPin').value = ''; }
-            document.addEventListener('visibilitychange', () => { if (document.hidden && stored()) lock(); });
-            window.addEventListener('pagehide', () => { if (stored()) lock(); });
+            // Sul PC un semplice cambio di scheda non deve richiedere di nuovo il PIN.
+            // Sui telefoni manteniamo il blocco quando l'app passa in secondo piano.
+            const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+            if (isPhone) {
+              document.addEventListener('visibilitychange', () => { if (document.hidden && stored()) lock(); });
+              window.addEventListener('pagehide', () => { if (stored()) lock(); });
+            }
             render();
           })();
           </script>"""
           if 'id="appSecurityOverlay"' not in html:
               html = html.replace('</body>', security_script + '\n</body>', 1)
-          html = html.replace('versione 0.2.5 · sincronizzazione cloud protetta', 'versione 0.2.7 · sincronizzazione cloud protetta')
+          html = html.replace('versione 0.2.5 · sincronizzazione cloud protetta', 'versione 0.2.8 · sincronizzazione cloud protetta')
           old_backup_panel = '<h3>Backup dei dati</h3>'
           panel_start = html.find(old_backup_panel)
           if panel_start < 0:
@@ -432,7 +437,7 @@ jobs:
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.7")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.8", "bilancio-casa-shell-v0.2.7")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
