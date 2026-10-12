@@ -121,7 +121,7 @@ jobs:
           app = app[:start] + replacement + app[end:]
           
           old_sort = "const rows = [...movements].filter(inAccountingPeriod).sort(sortLatest);"
-          new_sort = "const rows = [...movements].filter(inAccountingPeriod).sort((a, b) => a.movement_date.localeCompare(b.movement_date) || String(a.created_at || '').localeCompare(String(b.created_at || '')));"
+          new_sort = "const rows = [...movements].filter(inAccountingPeriod).sort(sortLatest);"
           if old_sort not in app:
               raise SystemExit("Ordinamento della tabella movimenti non trovato")
           app = app.replace(old_sort, new_sort, 1)
@@ -143,11 +143,62 @@ jobs:
               if marker not in html:
                   raise SystemExit("Area messaggi di autenticazione non trovata")
               html = html.replace(marker, marker + '\n      <button id="authResendBtn" class="text-button" type="button">Invia di nuovo l’email di conferma</button>', 1)
-          html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.3 · sincronizzazione cloud protetta')
+          html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.4 · sincronizzazione cloud protetta')
+          archive_script = r"""<script>
+          (() => {
+            const SIZE=20, states=new WeakMap();
+            const norm=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+            function dateOf(row){
+              const s=(row.cells[0]?.textContent||'').trim(),m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+              if(m)return new Date(+m[3],+m[2]-1,+m[1]).getTime();
+              const d=Date.parse(s);return Number.isNaN(d)?0:d;
+            }
+            function findTable(){
+              return [...document.querySelectorAll('table')].find(t=>{
+                const h=[...t.querySelectorAll('thead th')].map(x=>norm(x.textContent)).join('|');
+                return h.includes('data')&&h.includes('concetto')&&h.includes('categoria')&&h.includes('saldo');
+              });
+            }
+            function setup(t){
+              let s=states.get(t);if(s)return s;
+              const bar=document.createElement('div');bar.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0';
+              const input=document.createElement('input');input.type='search';input.placeholder='Cerca concetto, categoria o importo…';input.setAttribute('aria-label','Cerca nei movimenti');input.style.cssText='flex:1;min-width:220px;max-width:440px;padding:10px;border:1px solid #bbb;border-radius:8px;font:inherit';
+              const info=document.createElement('span');info.style.cssText='font-size:.9em';
+              const prev=document.createElement('button'),next=document.createElement('button');
+              prev.type=next.type='button';prev.textContent='‹ Precedente';next.textContent='Successiva ›';
+              [prev,next].forEach(b=>b.style.cssText='padding:8px 12px;border:1px solid #bbb;border-radius:8px;background:transparent;font:inherit;cursor:pointer');
+              bar.append(input,info,prev,next);t.parentNode.insertBefore(bar,t);
+              s={bar,input,info,prev,next,page:0};states.set(t,s);
+              input.addEventListener('input',()=>{s.page=0;apply(t)});
+              prev.addEventListener('click',()=>{s.page=Math.max(0,s.page-1);apply(t)});
+              next.addEventListener('click',()=>{s.page++;apply(t)});
+              return s;
+            }
+            function apply(t){
+              if(!t.isConnected)return;const body=t.tBodies[0];if(!body)return;
+              const s=setup(t),rows=[...body.rows];rows.sort((a,b)=>dateOf(b)-dateOf(a));
+              rows.forEach((r,i)=>{if(body.rows[i]!==r)body.appendChild(r)});
+              const q=norm(s.input.value),found=rows.filter(r=>!q||norm(r.textContent).includes(q));
+              const pages=Math.max(1,Math.ceil(found.length/SIZE));s.page=Math.min(s.page,pages-1);
+              const start=s.page*SIZE,visible=new Set(found.slice(start,start+SIZE));
+              rows.forEach(r=>{r.hidden=!visible.has(r)});
+              s.info.textContent=found.length?(start+1)+'–'+Math.min(start+SIZE,found.length)+' di '+found.length+' movimenti':'Nessun movimento trovato';
+              s.prev.disabled=s.page===0;s.next.disabled=s.page>=pages-1;
+              [s.prev,s.next].forEach(b=>{b.style.opacity=b.disabled?'.45':'1';b.style.cursor=b.disabled?'default':'pointer'});
+            }
+            function refresh(){const t=findTable();if(t)apply(t)}
+            function start(){refresh();new MutationObserver(()=>refresh()).observe(document.body,{childList:true,subtree:true})}
+            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+          })();
+          </script>"""
+          if 'Cerca nei movimenti' not in html:
+              if '</body>' not in html:
+                  raise SystemExit("Tag body non trovato per i controlli archivio")
+              html = html.replace('</body>', archive_script + '\\n</body>', 1)
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.3")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.4")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
