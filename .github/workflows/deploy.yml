@@ -40,21 +40,6 @@ jobs:
           mkdir public extracted
           unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
      
-      - name: Diagnostica archivio movimenti
-        run: |
-          echo '--- STRUTTURA HTML ---'
-          grep -n -i -E 'Archivio Movimenti|movimenti registrati|Importa excel|Esporta csv' extracted/bilancio-casa-pwa/index.html | head -30 || true
-          echo '--- FUNZIONI MOVIMENTI ---'
-          grep -n -i -E 'render.*mov|mov.*render|Archivio Movimenti|movimenti registrati|createElement\(.div.|innerHTML' extracted/bilancio-casa-pwa/app.js | head -100 || true
-          echo '--- CARICAMENTO E SINCRONIZZAZIONE DATI ---'
-          grep -n -i -E 'async function|function .*load|select\(|from\(|afterLogin|movements\s*=|renderDashboard\(' extracted/bilancio-casa-pwa/app.js | head -120 || true
-          echo '--- CAMPI IMPOSTAZIONI E STORICO ---'
-          sed -n '160,245p' extracted/bilancio-casa-pwa/app.js
-          sed -n '500,575p' extracted/bilancio-casa-pwa/app.js
-          echo '--- PANNELLO IMPOSTAZIONI HTML ---'
-          grep -n -i -B 12 -A 28 'Backup dei dati' extracted/bilancio-casa-pwa/index.html || true
-          echo '--- CODICE CARICAMENTO E RENDER ---'
-          sed -n '250,460p' extracted/bilancio-casa-pwa/app.js
       - name: Corregge conferma email
         run: |
           python - <<'PY'
@@ -219,6 +204,75 @@ jobs:
               if not re.search(refresh_pattern, app):
                   raise SystemExit("Funzione refreshData non trovata: aggiornamento automatico non applicato")
               app = re.sub(refresh_pattern, lambda match: refresh_patch, app, count=1)
+          backup_patch = r"""
+            async function createFullBackup() {
+              const button = $('backupCreateBtn'); button.disabled = true; button.textContent = 'Preparazione…';
+              try {
+                const results = await Promise.all([
+                  db.from('bilancio_movements').select('id,movement_date,concept,category,movement_type,amount,notes,import_key,created_at').eq('user_id', currentUser.id).order('movement_date', { ascending: true }),
+                  db.from('bilancio_settings').select('opening_date,opening_balance,daily_budget,updated_at').eq('user_id', currentUser.id).maybeSingle(),
+                  db.from('bilancio_quota_storico').select('valid_from,daily_budget,tax_reserve_daily,created_at,updated_at').eq('user_id', currentUser.id).order('valid_from', { ascending: true })
+                ]);
+                for (const result of results) if (result.error) throw result.error;
+                const backup = { format: 'bilancio-casa-backup', format_version: 1, created_at: new Date().toISOString(),
+                  data: { movements: results[0].data || [], settings: results[1].data, quota_history: results[2].data || [] } };
+                const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8' }));
+                const link = document.createElement('a'); link.href = url;
+                link.download = 'bilancio-casa-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+                showNotice('Backup completo scaricato. Conserva il file in un luogo sicuro.');
+              } catch (error) { showNotice('Backup non riuscito: ' + (error?.message || error), 'error'); }
+              finally { button.disabled = false; button.textContent = 'Scarica backup completo'; }
+            }
+            async function restoreFullBackup(file) {
+              if (!file) return; const input = $('backupRestoreFile');
+              try {
+                const backup = JSON.parse(await file.text());
+                if (backup?.format !== 'bilancio-casa-backup' || backup?.format_version !== 1 ||
+                    !Array.isArray(backup?.data?.movements) || !Array.isArray(backup?.data?.quota_history) || !backup?.data?.settings)
+                  throw new Error('Il file non è un backup Bilancio Casa valido.');
+                const data = backup.data;
+                if (!window.confirm('Ripristinare questo backup? I movimenti con lo stesso identificativo e le impostazioni/quote corrispondenti saranno aggiornati; gli altri movimenti saranno mantenuti.')) return;
+                const rows = data.movements.map(row => ({ id: row.id, user_id: currentUser.id, movement_date: row.movement_date,
+                  concept: row.concept, category: row.category, movement_type: row.movement_type, amount: row.amount,
+                  notes: row.notes ?? null, import_key: row.import_key ?? null, created_at: row.created_at }));
+                if (rows.some(row => !row.id || !row.movement_date || !row.concept || !['Entrata','Uscita'].includes(row.movement_type) || !Number.isFinite(Number(row.amount))))
+                  throw new Error('Il backup contiene movimenti incompleti o non validi.');
+                const s = data.settings;
+                const settingsRow = { user_id: currentUser.id, opening_date: s.opening_date, opening_balance: Number(s.opening_balance),
+                  daily_budget: Number(s.daily_budget), updated_at: s.updated_at || new Date().toISOString() };
+                if (!settingsRow.opening_date || !Number.isFinite(settingsRow.opening_balance) || !Number.isFinite(settingsRow.daily_budget))
+                  throw new Error('Le impostazioni del backup non sono valide.');
+                const quotas = data.quota_history.map(row => ({ user_id: currentUser.id, valid_from: row.valid_from,
+                  daily_budget: Number(row.daily_budget), tax_reserve_daily: Number(row.tax_reserve_daily),
+                  created_at: row.created_at, updated_at: row.updated_at }));
+                if (quotas.some(row => !row.valid_from || !Number.isFinite(row.daily_budget) || !Number.isFinite(row.tax_reserve_daily) || row.daily_budget < 0 || row.tax_reserve_daily < 0))
+                  throw new Error('Lo storico delle quote nel backup non è valido.');
+                const button = $('backupRestoreBtn'); button.disabled = true; button.textContent = 'Ripristino…';
+                try {
+                  for (let i=0; i<rows.length; i+=200) {
+                    const batch=rows.slice(i,i+200); if (!batch.length) continue;
+                    const { error } = await db.from('bilancio_movements').upsert(batch, { onConflict: 'id' }); if (error) throw error;
+                  }
+                  const { error: settingsError } = await db.from('bilancio_settings').upsert(settingsRow, { onConflict: 'user_id' });
+                  if (settingsError) throw settingsError;
+                  if (quotas.length) {
+                    const { error: quotaError } = await db.from('bilancio_quota_storico').upsert(quotas, { onConflict: 'user_id,valid_from' });
+                    if (quotaError) throw quotaError;
+                  }
+                  await loadSettings(); await loadMovements(); renderAll();
+                  showNotice('Backup ripristinato. I movimenti non presenti nel file sono stati mantenuti.');
+                } finally { button.disabled = false; button.textContent = 'Ripristina backup'; }
+              } catch (error) { showNotice('Ripristino non riuscito: ' + (error?.message || error), 'error'); }
+              finally { input.value = ''; }
+            }
+          """
+          if "async function createFullBackup()" not in app:
+              init_marker = "  async function initialize() {"
+              if init_marker not in app: raise SystemExit("Punto di inserimento backup non trovato")
+              app = app.replace(init_marker, backup_patch + "\\n" + init_marker, 1)
+          app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\\n\\n  async function initialize() {", 1)
+
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
@@ -356,11 +410,29 @@ jobs:
           </script>"""
           if 'id="appSecurityOverlay"' not in html:
               html = html.replace('</body>', security_script + '\n</body>', 1)
-          html = html.replace('versione 0.2.5 · sincronizzazione cloud protetta', 'versione 0.2.6 · sincronizzazione cloud protetta')
+          html = html.replace('versione 0.2.5 · sincronizzazione cloud protetta', 'versione 0.2.7 · sincronizzazione cloud protetta')
+          old_backup_panel = '<h3>Backup dei dati</h3>'
+          panel_start = html.find(old_backup_panel)
+          if panel_start < 0:
+              raise SystemExit("Pannello backup non trovato nel pacchetto originale")
+          panel_end = html.find('</article>', panel_start)
+          if panel_end < 0:
+              raise SystemExit("Fine pannello backup non trovata")
+          new_backup_panel = """<h3>Backup dei dati</h3>
+          <p>Scarica un backup completo in formato JSON: include movimenti, impostazioni del conto e storico delle quote giornaliere.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0">
+            <button id="backupCreateBtn" class="button button-primary" type="button">Scarica backup completo</button>
+            <button id="backupRestoreBtn" class="button button-soft" type="button">Ripristina backup</button>
+            <input id="backupRestoreFile" type="file" accept=".json,application/json" hidden>
+          </div>
+          <p class="small-note">Il ripristino aggiorna i movimenti con lo stesso identificativo e le impostazioni/quote corrispondenti; non cancella gli altri movimenti. Conserva il file in un luogo sicuro e non caricarlo su GitHub.</p>
+          """
+          html = html[:panel_start] + new_backup_panel + html[panel_end:]
+
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.6")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.7")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
