@@ -180,6 +180,38 @@ jobs:
               app = app.replace(binding, binding + "\n    $('authResendBtn').addEventListener('click', resendConfirmationEmail);", 1)
           if "emailRedirectTo: appRedirectUrl()" not in app:
               raise SystemExit("Redirect email non inserito")
+          refresh_anchor = """  async function refreshData() {
+              await loadSettings();
+              await loadMovements();
+              renderAll();
+            }"""
+          refresh_patch = """  async function refreshData() {
+              await loadSettings();
+              await loadMovements();
+              renderAll();
+            }
+
+            // Aggiorna i dati dal cloud senza ricaricare la pagina.
+            // Evita il refresh mentre l'utente sta interagendo con un campo di input.
+            let automaticRefreshRunning = false;
+            setInterval(async () => {
+              if (!currentUser || document.hidden || automaticRefreshRunning) return;
+              const active = document.activeElement;
+              if (active && (active.matches('input, textarea, select') || active.isContentEditable)) return;
+              automaticRefreshRunning = true;
+              try {
+                await loadMovements();
+                renderAll();
+              } catch (error) {
+                console.warn('Aggiornamento automatico non riuscito:', error);
+              } finally {
+                automaticRefreshRunning = false;
+              }
+            }, 30000);"""
+          if "automaticRefreshRunning" not in app:
+              if refresh_anchor not in app:
+                  raise SystemExit("Funzione refreshData non trovata: aggiornamento automatico non applicato")
+              app = app.replace(refresh_anchor, refresh_patch, 1)
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
@@ -190,7 +222,7 @@ jobs:
               if marker not in html:
                   raise SystemExit("Area messaggi di autenticazione non trovata")
               html = html.replace(marker, marker + '\n      <button id="authResendBtn" class="text-button" type="button">Invia di nuovo l’email di conferma</button>', 1)
-          html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.4 · sincronizzazione cloud protetta')
+          html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.5 · sincronizzazione cloud protetta')
           archive_script = r"""<script>
           (() => {
             const SIZE=20, states=new WeakMap();
@@ -245,7 +277,7 @@ jobs:
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.4")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.5")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
