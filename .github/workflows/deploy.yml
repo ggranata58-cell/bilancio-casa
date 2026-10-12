@@ -208,10 +208,12 @@ jobs:
                 automaticRefreshRunning = false;
               }
             }, 30000);"""
+          import re
           if "automaticRefreshRunning" not in app:
-              if refresh_anchor not in app:
+              refresh_pattern = r"  async function refreshData\(\) \{\s+await loadSettings\(\);\s+await loadMovements\(\);\s+renderAll\(\);\s+\}"
+              if not re.search(refresh_pattern, app):
                   raise SystemExit("Funzione refreshData non trovata: aggiornamento automatico non applicato")
-              app = app.replace(refresh_anchor, refresh_patch, 1)
+              app = re.sub(refresh_pattern, lambda match: refresh_patch, app, count=1)
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
