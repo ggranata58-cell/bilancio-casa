@@ -337,11 +337,11 @@ jobs:
               html = html.replace('</body>', archive_script + '\n</body>', 1)
           consistency_script = r"""<script>
           (() => {
-            const norm = s => (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();
+            const norm = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
             const money = s => {
               let v = (s || '').replace(/[^0-9,.-]/g, '').trim();
               if (!v) return NaN;
-              if (v.includes(',')) v = v.replace(/\\./g, '').replace(',', '.');
+              if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.');
               const n = Number(v);
               return Number.isFinite(n) ? n : NaN;
             };
@@ -388,7 +388,7 @@ jobs:
                   const olderBalance = money(older.cells[balanceIndex].textContent);
                   if (![amount, newerBalance, olderBalance].every(Number.isFinite)) continue;
                   if (newerDate && olderDate && newerDate !== olderDate) {
-                    const parseDate = s => { const m=s.match(/^(\\d{1,2})[\\/.-](\\d{1,2})[\\/.-](\\d{4})$/); return m ? new Date(+m[3],+m[2]-1,+m[1]).getTime() : Date.parse(s); };
+                    const parseDate = s => { const m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/); return m ? new Date(+m[3],+m[2]-1,+m[1]).getTime() : Date.parse(s); };
                     const nd = parseDate(newerDate), od = parseDate(olderDate);
                     if (Number.isFinite(nd) && Number.isFinite(od) && nd < od) continue;
                   }
