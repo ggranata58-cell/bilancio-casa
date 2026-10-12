@@ -282,12 +282,7 @@ jobs:
             let balance = Number(settings.opening_balance) || 0;
             const summary = $('balanceCheckSummary');
             if (!summary) return;
-            summary.innerHTML = [
-              ['Saldo iniziale', money(balance)],
-              ['Entrate', money(income)],
-              ['Uscite', money(expenses)],
-              ['Saldo finale calcolato', money(balance + income - expenses)]
-            ].map(([label, value]) => `<div class="balance-check-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+            summary.innerHTML = `<div class="balance-check-stat"><span>Saldo finale calcolato</span><strong>${escapeHtml(money(balance + income - expenses))}</strong></div><p class="small-note">Ricalcolo cronologico completato.</p>`;
             const body = $('balanceCheckRows');
             if (!body) return;
             if (!rows.length) {
@@ -382,12 +377,6 @@ jobs:
               <div><h3>Controllo coerenza del saldo</h3><p class="small-note">Ricalcolo cronologico dal saldo iniziale, senza modificare i movimenti.</p></div>
             </div>
             <div id="balanceCheckSummary" class="balance-check-summary"></div>
-            <div class="table-wrap">
-              <table class="balance-check-table">
-                <thead><tr><th>Data</th><th>Movimento</th><th class="money">Saldo precedente</th><th class="money">Importo +/-</th><th class="money">Saldo progressivo</th></tr></thead>
-                <tbody id="balanceCheckRows"><tr><td colspan="5" class="table-empty">Caricamento…</td></tr></tbody>
-              </table>
-            </div>
           </article>"""
           if 'id="balanceCheckPanel"' not in html:
             if movement_marker not in html:
