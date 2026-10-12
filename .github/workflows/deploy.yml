@@ -130,16 +130,17 @@ jobs:
 
           html_path = root / "index.html"
           html = html_path.read_text(encoding="utf-8")
+          html = html.replace("xlsx@0.18.12/dist/xlsx.full.min.js", "xlsx@0.18.5/dist/xlsx.full.min.js")
           marker = '<p id="authMessage" class="small-note" role="status" aria-live="polite"></p>'
           if 'id="authResendBtn"' not in html:
               if marker not in html:
                   raise SystemExit("Area messaggi di autenticazione non trovata")
               html = html.replace(marker, marker + '\n      <button id="authResendBtn" class="text-button" type="button">Invia di nuovo l’email di conferma</button>', 1)
-          html = html.replace('Bilancio Casa · versione 0.2.0 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.1 · sincronizzazione cloud protetta')
+          html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.1 · sincronizzazione cloud protetta')
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.0", "bilancio-casa-shell-v0.2.1")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.1")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
