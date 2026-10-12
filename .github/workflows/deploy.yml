@@ -345,12 +345,16 @@ jobs:
               const n = Number(v);
               return Number.isFinite(n) ? n : NaN;
             };
+            function headerFor(t) {
+              return [...t.querySelectorAll('tr')].find(row => {
+                const h = [...row.cells].map(x => norm(x.textContent));
+                return h.some(x => x === 'data' || x.startsWith('data ')) &&
+                  h.some(x => x.includes('concetto')) &&
+                  h.some(x => x === 'saldo' || x.startsWith('saldo '));
+              }) || null;
+            }
             function findTable() {
-              return [...document.querySelectorAll('table')].find(t => {
-                const headerRow = t.tHead?.rows?.[0] || t.rows?.[0];
-                const h = [...(headerRow?.cells || [])].map(x => norm(x.textContent)).join('|');
-                return h.includes('data') && h.includes('concetto') && h.includes('saldo');
-              });
+              return [...document.querySelectorAll('table')].find(t => !!headerFor(t));
             }
             function setup() {
               if (document.getElementById('balanceConsistencyPanel')) return;
@@ -368,11 +372,12 @@ jobs:
                   panel.querySelector('#balanceConsistencyResult').textContent = 'Riquadro presente, ma non riesco a individuare la tabella dei movimenti. Il controllo non è stato eseguito.';
                   return;
                 }
-                const headerRow = table.tHead?.rows?.[0] || table.rows?.[0];
+                const headerRow = headerFor(table);
                 const headers = [...(headerRow?.cells || [])].map(x => norm(x.textContent));
-                const amountIndex = headers.findIndex(h => h.includes('importo') && (h.includes('+/-') || h.includes('+ / -') || h.includes('segno')));
+                const amountIndex = headers.findIndex(h => h.includes('importo'));
                 const balanceIndex = headers.findIndex(h => h === 'saldo' || h.startsWith('saldo '));
-                const rows = [...(table.tBodies[0]?.rows || [])].filter(r => r.cells.length > Math.max(amountIndex, balanceIndex));
+                const bodyRows = [...(table.tBodies[0]?.rows || [])];
+                const rows = bodyRows.filter(r => r !== headerRow && r.cells.length > Math.max(amountIndex, balanceIndex));
                 const result = panel.querySelector('#balanceConsistencyResult');
                 if (amountIndex < 0 || balanceIndex < 0 || rows.length < 2) {
                   result.textContent = 'Non posso completare il controllo: intestazioni o movimenti insufficienti.';
