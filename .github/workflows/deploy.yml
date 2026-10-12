@@ -276,10 +276,86 @@ jobs:
               if '</body>' not in html:
                   raise SystemExit("Tag body non trovato per i controlli archivio")
               html = html.replace('</body>', archive_script + '\n</body>', 1)
+          security_script = r"""<script>
+          (() => {
+            const KEY = 'bilancioCasa.pin.v1';
+            const style = document.createElement('style');
+            style.textContent = '#appSecurityOverlay{position:fixed;inset:0;z-index:2147483647;background:#f5f6f8;color:#18202a;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}#appSecurityOverlay *{box-sizing:border-box}#appSecurityOverlay .security-card{width:100%;max-width:360px;background:#fff;border:1px solid #d9dee5;border-radius:18px;padding:26px;box-shadow:0 12px 36px rgba(0,0,0,.16)}#appSecurityOverlay h1{font-size:1.45rem;margin:0 0 8px}#appSecurityOverlay p{line-height:1.45;margin:0 0 18px;color:#4b5563}#appSecurityOverlay input{display:block;width:100%;font-size:1.4rem;letter-spacing:.35em;text-align:center;padding:12px;border:1px solid #aab3bf;border-radius:10px;margin:12px 0}#appSecurityOverlay button{width:100%;padding:12px;border:0;border-radius:10px;background:#1e40af;color:white;font-size:1rem;font-weight:600}#appSecurityOverlay .security-error{min-height:1.4em;color:#b42318;font-size:.9rem;margin-top:10px}';
+            document.head.appendChild(style);
+            const overlay = document.createElement('div');
+            overlay.id = 'appSecurityOverlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.innerHTML = '<div class="security-card"><h1>Bilancio Casa</h1><p id="securityMessage"></p><form id="securityForm"><input id="securityPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" minlength="6" autocomplete="off" aria-label="PIN di 6 cifre" required><button id="securitySubmit" type="submit"></button><div id="securityError" class="security-error" role="status" aria-live="polite"></div></form></div>';
+            document.body.appendChild(overlay);
+            const $ = id => document.getElementById(id);
+            let stage = 'unlock', firstPin = '', unlocked = false, busy = false, failures = 0;
+            const stored = () => localStorage.getItem(KEY);
+            function render() {
+              const hasPin = !!stored();
+              stage = hasPin ? 'unlock' : (firstPin ? 'confirm' : 'create');
+              $('securityMessage').textContent = stage === 'create' ? 'Per proteggere i dati su questo dispositivo, crea un PIN di 6 cifre.' : stage === 'confirm' ? 'Inserisci di nuovo il PIN per confermarlo.' : 'Inserisci il PIN per visualizzare il bilancio.';
+              $('securitySubmit').textContent = stage === 'unlock' ? 'Sblocca' : stage === 'confirm' ? 'Conferma PIN' : 'Crea PIN';
+              $('securityPin').value = '';
+              $('securityPin').setAttribute('aria-label', stage === 'unlock' ? 'PIN di sblocco' : 'Crea PIN di 6 cifre');
+              $('securityError').textContent = '';
+              setTimeout(() => $('securityPin').focus(), 80);
+            }
+            async function hashPin(pin, salt) {
+              const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+              const bits = await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'}, material, 256);
+              return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
+            }
+            function fromHex(hex) { return new Uint8Array(hex.match(/.{2}/g).map(x=>parseInt(x,16))); }
+            function toHex(bytes) { return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join(''); }
+            function lock() {
+              unlocked = false;
+              overlay.style.display = 'flex';
+              $('securityPin').value = '';
+              if (stored()) { stage = 'unlock'; $('securityMessage').textContent = 'Inserisci il PIN per visualizzare il bilancio.'; $('securitySubmit').textContent = 'Sblocca'; }
+            }
+            $('securityForm').addEventListener('submit', async event => {
+              event.preventDefault();
+              if (busy) return;
+              const pin = $('securityPin').value;
+              if (!/^\d{6}$/.test(pin)) { $('securityError').textContent = 'Il PIN deve contenere esattamente 6 cifre.'; return; }
+              busy = true; $('securitySubmit').disabled = true;
+              try {
+                if (stage === 'create') {
+                  firstPin = pin; stage = 'confirm'; render();
+                } else if (stage === 'confirm') {
+                  if (pin !== firstPin) { firstPin = ''; stage = 'create'; $('securityError').textContent = 'I PIN non coincidono. Ricomincia.'; $('securityMessage').textContent = 'Scegli un PIN di 6 cifre.'; $('securitySubmit').textContent = 'Crea PIN'; $('securityPin').value = ''; return; }
+                  const salt = crypto.getRandomValues(new Uint8Array(16));
+                  const hash = await hashPin(pin, salt);
+                  localStorage.setItem(KEY, toHex(salt) + ':' + hash);
+                  firstPin = ''; unlock();
+                } else {
+                  const parts = (stored() || '').split(':');
+                  if (parts.length !== 2) { localStorage.removeItem(KEY); firstPin = ''; render(); return; }
+                  const hash = await hashPin(pin, fromHex(parts[0]));
+                  if (hash !== parts[1]) { failures++; $('securityError').textContent = failures >= 5 ? 'Troppi tentativi. Attendi 15 secondi.' : 'PIN non corretto.'; $('securityPin').value = ''; if (failures >= 5) { $('securitySubmit').disabled = true; setTimeout(() => { failures = 0; $('securitySubmit').disabled = false; $('securityError').textContent = ''; $('securityPin').focus(); }, 15000); } return; }
+                  failures = 0; unlock();
+                }
+              } catch (e) {
+                $('securityError').textContent = 'Protezione non disponibile in questo browser. Ricarica l’app e riprova.';
+              } finally {
+                busy = false;
+                if (!$('securitySubmit').disabled) $('securitySubmit').disabled = false;
+              }
+            });
+            function unlock() { unlocked = true; overlay.style.display = 'none'; $('securityPin').value = ''; }
+            document.addEventListener('visibilitychange', () => { if (document.hidden && stored()) lock(); });
+            window.addEventListener('pagehide', () => { if (stored()) lock(); });
+            render();
+          })();
+          </script>"""
+          if 'id="appSecurityOverlay"' not in html:
+              html = html.replace('</body>', security_script + '\n</body>', 1)
+          html = html.replace('versione 0.2.5 · sincronizzazione cloud protetta', 'versione 0.2.6 · sincronizzazione cloud protetta')
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.5")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.2", "bilancio-casa-shell-v0.2.6")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
