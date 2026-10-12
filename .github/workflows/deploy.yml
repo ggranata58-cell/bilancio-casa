@@ -286,7 +286,7 @@ jobs:
           html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.5 · sincronizzazione cloud protetta')
           archive_script = r"""<script>
           (() => {
-            const SIZE=20, states=new WeakMap();
+            const SIZE=10, states=new WeakMap();
             const norm=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
             function dateOf(row){
               const s=(row.cells[0]?.textContent||'').trim(),m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
