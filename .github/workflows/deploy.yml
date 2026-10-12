@@ -273,7 +273,48 @@ jobs:
               app = app.replace(init_marker, backup_patch + "\n" + init_marker, 1)
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
-          app_path.write_text(app, encoding="utf-8")
+          balance_function = r"""  function renderBalanceCheck() {
+    const rows = [...movements]
+      .filter(inAccountingPeriod)
+      .sort((a, b) => a.movement_date.localeCompare(b.movement_date) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
+    const income = rows.filter(m => m.movement_type === 'Entrata').reduce((sum, m) => sum + Number(m.amount || 0), 0);
+    const expenses = rows.filter(m => m.movement_type === 'Uscita').reduce((sum, m) => sum + Number(m.amount || 0), 0);
+    let balance = Number(settings.opening_balance) || 0;
+    const summary = $('balanceCheckSummary');
+    if (!summary) return;
+    summary.innerHTML = [
+      ['Saldo iniziale', money(balance)],
+      ['Entrate', money(income)],
+      ['Uscite', money(expenses)],
+      ['Saldo finale calcolato', money(balance + income - expenses)]
+    ].map(([label, value]) => `<div class="balance-check-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+    const body = $('balanceCheckRows');
+    if (!body) return;
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="5" class="table-empty">Nessun movimento nel periodo contabile.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(m => {
+      const previous = balance;
+      const amount = signed(m);
+      balance = Math.round((balance + amount + Number.EPSILON) * 100) / 100;
+      return `<tr><td>${escapeHtml(fmtDate(m.movement_date))}</td><td><strong>${escapeHtml(m.concept)}</strong><div class="small-note">${escapeHtml(m.category)}</div></td><td class="money">${escapeHtml(money(previous))}</td><td class="money ${amount >= 0 ? 'amount-in' : 'amount-out'}">${amount >= 0 ? '+' : '−'} ${escapeHtml(money(Math.abs(amount)))}</td><td class="money"><strong>${escapeHtml(money(balance))}</strong></td></tr>`;
+    }).join('');
+  }
+
+"""
+          if ("function renderBalanceCheck()" not in app) {
+            const_marker = "  function renderAllMovements() {"
+            if const_marker not in app:
+              raise SystemExit("Funzione renderAllMovements non trovata: controllo saldo non inserito")
+            app = app.replace(const_marker, balance_function + const_marker, 1)
+          }
+          const_count = "    $('movementCount').textContent = `${rows.length} movimenti registrati`;"
+          if "renderBalanceCheck();" not in app:
+            if const_count not in app:
+              raise SystemExit("Punto di aggiornamento archivio non trovato")
+            app = app.replace(const_count, const_count + "\n    renderBalanceCheck();", 1)
+                    app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
           html = html_path.read_text(encoding="utf-8")
@@ -335,108 +376,25 @@ jobs:
               if '</body>' not in html:
                   raise SystemExit("Tag body non trovato per i controlli archivio")
               html = html.replace('</body>', archive_script + '\n</body>', 1)
-          consistency_script = r"""<script>
-          (() => {
-            const norm = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-            const money = s => {
-              let v = (s || '').replace(/[^0-9,.-]/g, '').trim();
-              if (!v) return NaN;
-              if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.');
-              const n = Number(v);
-              return Number.isFinite(n) ? n : NaN;
-            };
-            function headerFor(t) {
-              const rows = [...t.querySelectorAll('tr')];
-              const score = row => {
-                const h = [...row.cells].map(x => norm(x.textContent));
-                return Number(h.some(x => x === 'data' || x.startsWith('data '))) +
-                  Number(h.some(x => x.includes('concetto'))) +
-                  Number(h.some(x => x.includes('importo'))) +
-                  Number(h.some(x => x === 'saldo' || x.startsWith('saldo ')));
-              };
-              return rows.find(row => score(row) >= 3) ||
-                rows.find(row => score(row) >= 2) || null;
-            }
-            function findTable() {
-              return [...document.querySelectorAll('table')].find(t => {
-                const labels = [...t.querySelectorAll('th,td')].slice(0, 24).map(x => norm(x.textContent)).join('|');
-                return labels.includes('data') && labels.includes('concetto') && labels.includes('categoria') && labels.includes('saldo');
-              }) || null;
-            }
-            function setup() {
-              const table = findTable();
-              let panel = document.getElementById('balanceConsistencyPanel');
-              // Durante i cambi di schermata la tabella può sparire per un istante.
-              // Non rimuovere il pannello in quel passaggio transitorio.
-              if (!table) return;
-              if (panel) {
-                if (panel.parentNode !== table.parentNode || panel.nextElementSibling !== table) {
-                  table.parentNode.insertBefore(panel, table);
-                }
-                return;
-              }
-              panel = document.createElement('section');
-              panel.id = 'balanceConsistencyPanel';
-              panel.style.cssText = 'margin:16px 0;padding:14px;border:1px solid #cbd5e1;border-radius:12px;background:var(--card-bg, #f8fafc);color:inherit';
-              panel.innerHTML = '<strong>Controllo coerenza del saldo</strong><p style="margin:6px 0 10px;font-size:.92em">Verifica che il saldo di ogni movimento sia coerente con quello del movimento precedente. Non modifica i dati.</p><button id="balanceConsistencyRun" type="button" style="padding:8px 12px;border:1px solid #94a3b8;border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer">Controlla saldo</button><p id="balanceConsistencyResult" role="status" aria-live="polite" style="margin:10px 0 0"></p>';
-              table.parentNode.insertBefore(panel, table);
-              panel.querySelector('button').addEventListener('click', () => {
-                const currentTable = findTable();
-                if (!currentTable) {
-                  panel.querySelector('#balanceConsistencyResult').textContent = 'La tabella dei movimenti non è disponibile. Il controllo non è stato eseguito.';
-                  return;
-                }
-                const headerRow = headerFor(currentTable);
-                const headers = [...(headerRow?.cells || [])].map(x => norm(x.textContent));
-                const amountIndex = headers.findIndex(h => h.includes('importo') && (h.includes('+') || h.includes('segno')));
-                const fallbackAmountIndex = headers.findIndex(h => h === 'importo');
-                const signedAmountIndex = amountIndex >= 0 ? amountIndex : fallbackAmountIndex;
-                const balanceIndex = headers.findIndex(h => h === 'saldo' || h.startsWith('saldo '));
-                const bodyRows = [...(currentTable.tBodies[0]?.rows || [])];
-                const rows = bodyRows.filter(r => r !== headerRow && r.cells.length > Math.max(signedAmountIndex, balanceIndex));
-                const result = panel.querySelector('#balanceConsistencyResult');
-                if (signedAmountIndex < 0 || balanceIndex < 0 || rows.length < 2) {
-                  result.textContent = 'Non posso completare il controllo: intestazioni o movimenti insufficienti.';
-                  return;
-                }
-                let checked = 0, errors = [];
-                for (let i = 0; i < rows.length - 1; i++) {
-                  const newer = rows[i], older = rows[i + 1];
-                  const newerDate = (newer.cells[0]?.textContent || '').trim();
-                  const olderDate = (older.cells[0]?.textContent || '').trim();
-                  const amount = money(newer.cells[signedAmountIndex].textContent);
-                  const newerBalance = money(newer.cells[balanceIndex].textContent);
-                  const olderBalance = money(older.cells[balanceIndex].textContent);
-                  if (![amount, newerBalance, olderBalance].every(Number.isFinite)) continue;
-                  if (newerDate && olderDate && newerDate !== olderDate) {
-                    const parseDate = s => { const m=s.match(/^(\d{1,2})[\\/.-](\d{1,2})[\\/.-](\d{4})$/); return m ? new Date(+m[3],+m[2]-1,+m[1]).getTime() : Date.parse(s); };
-                    const nd = parseDate(newerDate), od = parseDate(olderDate);
-                    if (Number.isFinite(nd) && Number.isFinite(od) && nd < od) continue;
-                  }
-                  checked++;
-                  const expectedOlder = newerBalance - amount;
-                  if (Math.abs(expectedOlder - olderBalance) > 0.02) {
-                    errors.push({date:newerDate, concept:(newer.cells[2]?.textContent || newer.cells[1]?.textContent || '').trim(), expected:expectedOlder, actual:olderBalance});
-                  }
-                }
-                if (!checked) {
-                  result.textContent = 'Nessun confronto eseguibile: verifica che la tabella mostri almeno due movimenti e la colonna Importo +/-.';
-                } else if (!errors.length) {
-                  result.textContent = 'Controllo completato: ' + checked + ' passaggi verificati, nessuna incoerenza rilevata. Il controllo riguarda i saldi tra movimenti, non il saldo iniziale.';
-                } else {
-                  result.textContent = 'Attenzione: ' + errors.length + ' possibile/i incoerenza/e su ' + checked + ' confronti. Primo caso: ' + errors[0].date + ' — ' + errors[0].concept + '. Saldo precedente atteso ' + errors[0].expected.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €, rilevato ' + errors[0].actual.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €. Nessun dato è stato modificato.';
-                }
-              });
-            }
-            const observer = new MutationObserver(setup);
-            function start() { setup(); observer.observe(document.body, {childList:true,subtree:true}); }
-            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once:true}); else start();
-          })();
-          </script>"""
-          # Il pacchetto sorgente viene estratto da zero a ogni deploy:
-          # inseriamo sempre lo script di controllo, senza usare come guardia
-          # l'ID del pannello che è già citato all'interno dello script stesso.
-          html = html.replace('</body>', consistency_script + '\\n</body>', 1)
+          # Inserisce il controllo del saldo solo nella schermata Movimenti.
+          movement_marker = '<section id="view-movements" class="view-panel" hidden>'
+          balance_panel = """<article class="panel panel-spaced" id="balanceCheckPanel" style="margin-bottom:18px">
+            <div class="section-heading">
+              <div><h3>Controllo coerenza del saldo</h3><p class="small-note">Ricalcolo cronologico dal saldo iniziale, senza modificare i movimenti.</p></div>
+            </div>
+            <div id="balanceCheckSummary" class="balance-check-summary"></div>
+            <div class="table-wrap">
+              <table class="balance-check-table">
+                <thead><tr><th>Data</th><th>Movimento</th><th class="money">Saldo precedente</th><th class="money">Importo +/-</th><th class="money">Saldo progressivo</th></tr></thead>
+                <tbody id="balanceCheckRows"><tr><td colspan="5" class="table-empty">Caricamento…</td></tr></tbody>
+              </table>
+            </div>
+          </article>"""
+          if 'id="balanceCheckPanel"' not in html:
+            if movement_marker not in html:
+              raise SystemExit("Schermata Movimenti non trovata: controllo saldo non inserito")
+            html = html.replace(movement_marker, movement_marker + "\n" + balance_panel, 1)
+
 
           security_script = r"""<script>
           (() => {
