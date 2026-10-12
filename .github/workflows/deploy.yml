@@ -335,6 +335,77 @@ jobs:
               if '</body>' not in html:
                   raise SystemExit("Tag body non trovato per i controlli archivio")
               html = html.replace('</body>', archive_script + '\n</body>', 1)
+          consistency_script = r"""<script>
+          (() => {
+            const norm = s => (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();
+            const money = s => {
+              let v = (s || '').replace(/[^0-9,.-]/g, '').trim();
+              if (!v) return NaN;
+              if (v.includes(',')) v = v.replace(/\\./g, '').replace(',', '.');
+              const n = Number(v);
+              return Number.isFinite(n) ? n : NaN;
+            };
+            function findTable() {
+              return [...document.querySelectorAll('table')].find(t => {
+                const h = [...t.querySelectorAll('thead th, thead td')].map(x => norm(x.textContent)).join('|');
+                return h.includes('data') && h.includes('concetto') && h.includes('saldo');
+              });
+            }
+            function setup() {
+              const table = findTable();
+              if (!table || document.getElementById('balanceConsistencyPanel')) return;
+              const panel = document.createElement('section');
+              panel.id = 'balanceConsistencyPanel';
+              panel.style.cssText = 'margin:16px 0;padding:14px;border:1px solid #cbd5e1;border-radius:12px;background:var(--card-bg, #f8fafc);color:inherit';
+              panel.innerHTML = '<strong>Controllo coerenza del saldo</strong><p style="margin:6px 0 10px;font-size:.92em">Verifica che il saldo di ogni movimento sia coerente con quello del movimento precedente. Non modifica i dati.</p><button id="balanceConsistencyRun" type="button" style="padding:8px 12px;border:1px solid #94a3b8;border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer">Controlla saldo</button><p id="balanceConsistencyResult" role="status" aria-live="polite" style="margin:10px 0 0"></p>';
+              table.parentNode.insertBefore(panel, table);
+              panel.querySelector('button').addEventListener('click', () => {
+                const headers = [...table.querySelectorAll('thead th, thead td')].map(x => norm(x.textContent));
+                const amountIndex = headers.findIndex(h => h.includes('importo') && (h.includes('+/-') || h.includes('+ / -') || h.includes('segno')));
+                const balanceIndex = headers.findIndex(h => h === 'saldo' || h.startsWith('saldo '));
+                const rows = [...(table.tBodies[0]?.rows || [])].filter(r => r.cells.length > Math.max(amountIndex, balanceIndex));
+                const result = panel.querySelector('#balanceConsistencyResult');
+                if (amountIndex < 0 || balanceIndex < 0 || rows.length < 2) {
+                  result.textContent = 'Non posso completare il controllo: intestazioni o movimenti insufficienti.';
+                  return;
+                }
+                let checked = 0, errors = [];
+                for (let i = 0; i < rows.length - 1; i++) {
+                  const newer = rows[i], older = rows[i + 1];
+                  const newerDate = (newer.cells[0]?.textContent || '').trim();
+                  const olderDate = (older.cells[0]?.textContent || '').trim();
+                  const amount = money(newer.cells[amountIndex].textContent);
+                  const newerBalance = money(newer.cells[balanceIndex].textContent);
+                  const olderBalance = money(older.cells[balanceIndex].textContent);
+                  if (![amount, newerBalance, olderBalance].every(Number.isFinite)) continue;
+                  if (newerDate && olderDate && newerDate !== olderDate) {
+                    const parseDate = s => { const m=s.match(/^(\\d{1,2})[\\/.-](\\d{1,2})[\\/.-](\\d{4})$/); return m ? new Date(+m[3],+m[2]-1,+m[1]).getTime() : Date.parse(s); };
+                    const nd = parseDate(newerDate), od = parseDate(olderDate);
+                    if (Number.isFinite(nd) && Number.isFinite(od) && nd < od) continue;
+                  }
+                  checked++;
+                  const expectedOlder = newerBalance - amount;
+                  if (Math.abs(expectedOlder - olderBalance) > 0.02) {
+                    errors.push({date:newerDate, concept:(newer.cells[1]?.textContent || '').trim(), expected:expectedOlder, actual:olderBalance});
+                  }
+                }
+                if (!checked) {
+                  result.textContent = 'Nessun confronto eseguibile: controlla che la colonna Importo +/- contenga valori con segno e che la tabella mostri i movimenti.';
+                } else if (!errors.length) {
+                  result.textContent = 'Controllo completato: ' + checked + ' passaggi verificati, nessuna incoerenza rilevata. Il controllo riguarda i saldi tra movimenti, non il saldo iniziale.';
+                } else {
+                  result.textContent = 'Attenzione: ' + errors.length + ' possibile/i incoerenza/e su ' + checked + ' confronti. Primo caso: ' + errors[0].date + ' — ' + errors[0].concept + '. Saldo precedente atteso ' + errors[0].expected.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €, rilevato ' + errors[0].actual.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €. Nessun dato è stato modificato.';
+                }
+              });
+            }
+            const observer = new MutationObserver(setup);
+            function start() { setup(); observer.observe(document.body, {childList:true,subtree:true}); }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once:true}); else start();
+          })();
+          </script>"""
+          if 'id="balanceConsistencyPanel"' not in html:
+              html = html.replace('</body>', consistency_script + '\\n</body>', 1)
+
           security_script = r"""<script>
           (() => {
             const KEY = 'bilancioCasa.pin.v1';
