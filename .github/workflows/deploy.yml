@@ -273,41 +273,6 @@ jobs:
               app = app.replace(init_marker, backup_patch + "\n" + init_marker, 1)
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
-          balance_function = r"""  function renderBalanceCheck() {
-            const rows = [...movements]
-              .filter(inAccountingPeriod)
-              .sort((a, b) => a.movement_date.localeCompare(b.movement_date) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
-            const income = rows.filter(m => m.movement_type === 'Entrata').reduce((sum, m) => sum + Number(m.amount || 0), 0);
-            const expenses = rows.filter(m => m.movement_type === 'Uscita').reduce((sum, m) => sum + Number(m.amount || 0), 0);
-            let balance = Number(settings.opening_balance) || 0;
-            const summary = $('balanceCheckSummary');
-            if (!summary) return;
-            summary.innerHTML = `<div class="balance-check-stat"><span>Saldo finale calcolato</span><strong>${escapeHtml(money(balance + income - expenses))}</strong></div><p class="small-note">Ricalcolo cronologico completato.</p>`;
-            const body = $('balanceCheckRows');
-            if (!body) return;
-            if (!rows.length) {
-              body.innerHTML = '<tr><td colspan="5" class="table-empty">Nessun movimento nel periodo contabile.</td></tr>';
-              return;
-            }
-            body.innerHTML = rows.map(m => {
-              const previous = balance;
-              const amount = signed(m);
-              balance = Math.round((balance + amount + Number.EPSILON) * 100) / 100;
-              return `<tr><td>${escapeHtml(fmtDate(m.movement_date))}</td><td><strong>${escapeHtml(m.concept)}</strong><div class="small-note">${escapeHtml(m.category)}</div></td><td class="money">${escapeHtml(money(previous))}</td><td class="money ${amount >= 0 ? 'amount-in' : 'amount-out'}">${amount >= 0 ? '+' : '−'} ${escapeHtml(money(Math.abs(amount)))}</td><td class="money"><strong>${escapeHtml(money(balance))}</strong></td></tr>`;
-            }).join('');
-          }
-          
-          """
-          if "function renderBalanceCheck()" not in app:
-            render_marker = "  function renderAllMovements() {"
-            if render_marker not in app:
-              raise SystemExit("Funzione renderAllMovements non trovata: controllo saldo non inserito")
-            app = app.replace(render_marker, balance_function + render_marker, 1)
-          count_marker = "    $('movementCount').textContent = `${rows.length} movimenti registrati`;"
-          if "renderBalanceCheck();" not in app:
-            if count_marker not in app:
-              raise SystemExit("Punto di aggiornamento archivio non trovato")
-            app = app.replace(count_marker, count_marker + "\n    renderBalanceCheck();", 1)
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
@@ -370,20 +335,6 @@ jobs:
               if '</body>' not in html:
                   raise SystemExit("Tag body non trovato per i controlli archivio")
               html = html.replace('</body>', archive_script + '\n</body>', 1)
-          # Inserisce il controllo del saldo solo nella schermata Movimenti.
-          movement_marker = '<section id="view-movements" class="view-panel" hidden>'
-          balance_panel = """<article class="panel panel-spaced" id="balanceCheckPanel" style="margin-bottom:18px">
-            <div class="section-heading">
-              <div><h3>Controllo coerenza del saldo</h3><p class="small-note">Ricalcolo cronologico dal saldo iniziale, senza modificare i movimenti.</p></div>
-            </div>
-            <div id="balanceCheckSummary" class="balance-check-summary"></div>
-          </article>"""
-          if 'id="balanceCheckPanel"' not in html:
-            if movement_marker not in html:
-              raise SystemExit("Schermata Movimenti non trovata: controllo saldo non inserito")
-            html = html.replace(movement_marker, movement_marker + "\n" + balance_panel, 1)
-
-
           security_script = r"""<script>
           (() => {
             const KEY = 'bilancioCasa.pin.v1';
