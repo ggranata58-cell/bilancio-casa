@@ -366,11 +366,9 @@ jobs:
             function setup() {
               const table = findTable();
               let panel = document.getElementById('balanceConsistencyPanel');
-              // Il controllo esiste solo quando è presente la tabella dei movimenti.
-              if (!table) {
-                if (panel) panel.remove();
-                return;
-              }
+              // Durante i cambi di schermata la tabella può sparire per un istante.
+              // Non rimuovere il pannello in quel passaggio transitorio.
+              if (!table) return;
               if (panel) {
                 if (panel.parentNode !== table.parentNode || panel.nextElementSibling !== table) {
                   table.parentNode.insertBefore(panel, table);
