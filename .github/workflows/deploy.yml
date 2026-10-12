@@ -359,36 +359,45 @@ jobs:
             }
             function findTable() {
               return [...document.querySelectorAll('table')].find(t => {
-                const labels = [...t.querySelectorAll('th,td')].slice(0, 24).map(x => norm(x.textContent));
-                return labels.some(x => x.includes('data')) &&
-                  labels.some(x => x.includes('concetto')) &&
-                  labels.some(x => x.includes('saldo'));
+                const labels = [...t.querySelectorAll('th,td')].slice(0, 24).map(x => norm(x.textContent)).join('|');
+                return labels.includes('data') && labels.includes('concetto') && labels.includes('categoria') && labels.includes('saldo');
               }) || null;
             }
             function setup() {
-              if (document.getElementById('balanceConsistencyPanel')) return;
               const table = findTable();
-              const panel = document.createElement('section');
+              let panel = document.getElementById('balanceConsistencyPanel');
+              // Il controllo esiste solo quando è presente la tabella dei movimenti.
+              if (!table) {
+                if (panel) panel.remove();
+                return;
+              }
+              if (panel) {
+                if (panel.parentNode !== table.parentNode || panel.nextElementSibling !== table) {
+                  table.parentNode.insertBefore(panel, table);
+                }
+                return;
+              }
+              panel = document.createElement('section');
               panel.id = 'balanceConsistencyPanel';
               panel.style.cssText = 'margin:16px 0;padding:14px;border:1px solid #cbd5e1;border-radius:12px;background:var(--card-bg, #f8fafc);color:inherit';
               panel.innerHTML = '<strong>Controllo coerenza del saldo</strong><p style="margin:6px 0 10px;font-size:.92em">Verifica che il saldo di ogni movimento sia coerente con quello del movimento precedente. Non modifica i dati.</p><button id="balanceConsistencyRun" type="button" style="padding:8px 12px;border:1px solid #94a3b8;border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer">Controlla saldo</button><p id="balanceConsistencyResult" role="status" aria-live="polite" style="margin:10px 0 0"></p>';
-              const anchor = table || document.querySelector('main') || document.body;
-              if (table) anchor.parentNode.insertBefore(panel, anchor);
-              else anchor.insertBefore(panel, anchor.firstChild);
+              table.parentNode.insertBefore(panel, table);
               panel.querySelector('button').addEventListener('click', () => {
-                const table = findTable();
-                if (!table) {
-                  panel.querySelector('#balanceConsistencyResult').textContent = 'Riquadro presente, ma non riesco a individuare la tabella dei movimenti. Il controllo non è stato eseguito.';
+                const currentTable = findTable();
+                if (!currentTable) {
+                  panel.querySelector('#balanceConsistencyResult').textContent = 'La tabella dei movimenti non è disponibile. Il controllo non è stato eseguito.';
                   return;
                 }
-                const headerRow = headerFor(table);
+                const headerRow = headerFor(currentTable);
                 const headers = [...(headerRow?.cells || [])].map(x => norm(x.textContent));
-                const amountIndex = headers.findIndex(h => h.includes('importo'));
+                const amountIndex = headers.findIndex(h => h.includes('importo') && (h.includes('+') || h.includes('segno')));
+                const fallbackAmountIndex = headers.findIndex(h => h === 'importo');
+                const signedAmountIndex = amountIndex >= 0 ? amountIndex : fallbackAmountIndex;
                 const balanceIndex = headers.findIndex(h => h === 'saldo' || h.startsWith('saldo '));
-                const bodyRows = [...(table.tBodies[0]?.rows || [])];
-                const rows = bodyRows.filter(r => r !== headerRow && r.cells.length > Math.max(amountIndex, balanceIndex));
+                const bodyRows = [...(currentTable.tBodies[0]?.rows || [])];
+                const rows = bodyRows.filter(r => r !== headerRow && r.cells.length > Math.max(signedAmountIndex, balanceIndex));
                 const result = panel.querySelector('#balanceConsistencyResult');
-                if (amountIndex < 0 || balanceIndex < 0 || rows.length < 2) {
+                if (signedAmountIndex < 0 || balanceIndex < 0 || rows.length < 2) {
                   result.textContent = 'Non posso completare il controllo: intestazioni o movimenti insufficienti.';
                   return;
                 }
@@ -397,23 +406,23 @@ jobs:
                   const newer = rows[i], older = rows[i + 1];
                   const newerDate = (newer.cells[0]?.textContent || '').trim();
                   const olderDate = (older.cells[0]?.textContent || '').trim();
-                  const amount = money(newer.cells[amountIndex].textContent);
+                  const amount = money(newer.cells[signedAmountIndex].textContent);
                   const newerBalance = money(newer.cells[balanceIndex].textContent);
                   const olderBalance = money(older.cells[balanceIndex].textContent);
                   if (![amount, newerBalance, olderBalance].every(Number.isFinite)) continue;
                   if (newerDate && olderDate && newerDate !== olderDate) {
-                    const parseDate = s => { const m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/); return m ? new Date(+m[3],+m[2]-1,+m[1]).getTime() : Date.parse(s); };
+                    const parseDate = s => { const m=s.match(/^(\d{1,2})[\\/.-](\d{1,2})[\\/.-](\d{4})$/); return m ? new Date(+m[3],+m[2]-1,+m[1]).getTime() : Date.parse(s); };
                     const nd = parseDate(newerDate), od = parseDate(olderDate);
                     if (Number.isFinite(nd) && Number.isFinite(od) && nd < od) continue;
                   }
                   checked++;
                   const expectedOlder = newerBalance - amount;
                   if (Math.abs(expectedOlder - olderBalance) > 0.02) {
-                    errors.push({date:newerDate, concept:(newer.cells[1]?.textContent || '').trim(), expected:expectedOlder, actual:olderBalance});
+                    errors.push({date:newerDate, concept:(newer.cells[2]?.textContent || newer.cells[1]?.textContent || '').trim(), expected:expectedOlder, actual:olderBalance});
                   }
                 }
                 if (!checked) {
-                  result.textContent = 'Nessun confronto eseguibile: controlla che la colonna Importo +/- contenga valori con segno e che la tabella mostri i movimenti.';
+                  result.textContent = 'Nessun confronto eseguibile: verifica che la tabella mostri almeno due movimenti e la colonna Importo +/-.';
                 } else if (!errors.length) {
                   result.textContent = 'Controllo completato: ' + checked + ' passaggi verificati, nessuna incoerenza rilevata. Il controllo riguarda i saldi tra movimenti, non il saldo iniziale.';
                 } else {
