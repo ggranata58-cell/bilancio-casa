@@ -40,6 +40,12 @@ jobs:
           mkdir public extracted
           unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
      
+      - name: Diagnostica archivio movimenti
+        run: |
+          echo '--- STRUTTURA HTML ---'
+          grep -n -i -E 'Archivio Movimenti|movimenti registrati|Importa excel|Esporta csv' extracted/bilancio-casa-pwa/index.html | head -30 || true
+          echo '--- FUNZIONI MOVIMENTI ---'
+          grep -n -i -E 'render.*mov|mov.*render|Archivio Movimenti|movimenti registrati|createElement\(.div.|innerHTML' extracted/bilancio-casa-pwa/app.js | head -100 || true
       - name: Corregge conferma email
         run: |
           python - <<'PY'
