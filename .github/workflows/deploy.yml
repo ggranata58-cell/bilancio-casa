@@ -155,7 +155,7 @@ jobs:
             }
             function findTable(){
               return [...document.querySelectorAll('table')].find(t=>{
-                const h=[...t.querySelectorAll('thead th')].map(x=>norm(x.textContent)).join('|');
+                const h=[...t.querySelectorAll('th,td')].slice(0,24).map(x=>norm(x.textContent)).join('|');
                 return h.includes('data')&&h.includes('concetto')&&h.includes('categoria')&&h.includes('saldo');
               });
             }
@@ -181,7 +181,7 @@ jobs:
               const q=norm(s.input.value),found=rows.filter(r=>!q||norm(r.textContent).includes(q));
               const pages=Math.max(1,Math.ceil(found.length/SIZE));s.page=Math.min(s.page,pages-1);
               const start=s.page*SIZE,visible=new Set(found.slice(start,start+SIZE));
-              rows.forEach(r=>{r.hidden=!visible.has(r)});
+              rows.forEach(r=>{r.hidden=!visible.has(r);r.style.display=visible.has(r)?'':'none'});
               s.info.textContent=found.length?(start+1)+'–'+Math.min(start+SIZE,found.length)+' di '+found.length+' movimenti':'Nessun movimento trovato';
               s.prev.disabled=s.page===0;s.next.disabled=s.page>=pages-1;
               [s.prev,s.next].forEach(b=>{b.style.opacity=b.disabled?'.45':'1';b.style.cursor=b.disabled?'default':'pointer'});
