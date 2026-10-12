@@ -125,6 +125,59 @@ jobs:
 
           """
           app = app[:start] + replacement + app[end:]
+
+          old_render = """  function renderAllMovements() {
+              const rows = [...movements].filter(inAccountingPeriod).sort(sortLatest);
+              $('movementCount').textContent = `${rows.length} movimenti registrati`;
+              renderMovementList($('allMovements'), rows.slice(0, 100), true);
+            }"""
+          new_render = """  function renderAllMovements() {
+              const rows = [...movements].filter(inAccountingPeriod).sort(sortLatest);
+              $('movementCount').textContent = `${rows.length} movimenti registrati`;
+              const container = $('allMovements');
+              let controls = $('movementArchiveControls');
+              if (!controls) {
+                controls = document.createElement('div');
+                controls.id = 'movementArchiveControls';
+                controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0';
+                const info = document.createElement('span');
+                info.id = 'movementArchivePageInfo';
+                info.className = 'small-note';
+                const prev = document.createElement('button');
+                prev.id = 'movementArchivePrev';
+                prev.type = 'button';
+                prev.className = 'button button-soft';
+                prev.textContent = '‹ Precedente';
+                const next = document.createElement('button');
+                next.id = 'movementArchiveNext';
+                next.type = 'button';
+                next.className = 'button button-soft';
+                next.textContent = 'Successiva ›';
+                controls.append(prev, info, next);
+                container.parentNode.insertBefore(controls, container);
+                prev.addEventListener('click', () => {
+                  renderAllMovements.page = Math.max(0, (renderAllMovements.page || 0) - 1);
+                  renderAllMovements();
+                });
+                next.addEventListener('click', () => {
+                  renderAllMovements.page = (renderAllMovements.page || 0) + 1;
+                  renderAllMovements();
+                });
+              }
+              const pageSize = 20;
+              const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+              renderAllMovements.page = Math.min(renderAllMovements.page || 0, pageCount - 1);
+              const page = renderAllMovements.page;
+              renderMovementList(container, rows.slice(page * pageSize, (page + 1) * pageSize), true);
+              $('movementArchivePageInfo').textContent = rows.length
+                ? `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, rows.length)} di ${rows.length} movimenti`
+                : 'Nessun movimento';
+              $('movementArchivePrev').disabled = page === 0;
+              $('movementArchiveNext').disabled = page >= pageCount - 1;
+            }"""
+          if old_render not in app:
+              raise SystemExit("Funzione renderAllMovements non trovata: paginazione non applicata")
+          app = app.replace(old_render, new_render, 1)
           
           old_sort = "const rows = [...movements].filter(inAccountingPeriod).sort(sortLatest);"
           new_sort = "const rows = [...movements].filter(inAccountingPeriod).sort(sortLatest);"
