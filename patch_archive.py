@@ -19,25 +19,24 @@ if target not in files:
 
 info, raw = files[target]
 app = raw.decode("utf-8")
-# Stable-ID rows must carry the database id but omit import_key so Supabase keeps the stored key.
-stable_key_old = "        ...(hasStableId ? { id: suppliedId, import_key: `excel-id:${suppliedId}` } : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` }),"
-stable_key_new = "        ...(hasStableId ? { id: suppliedId } : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` }),"
-if stable_key_old in app:
-    app = app.replace(stable_key_old, stable_key_new, 1)
+# Fix the stable-ID branch without allowing a later unconditional import_key to override it.
 if "ID movimento" in app and "withStableId" in app:
-    # Stable-ID rows must not send import_key in the upsert payload; omitting it
-    # preserves the value already stored in Supabase instead of overwriting it.
-    old_key = "        import_key: hasStableId ? `excel-id:${suppliedId}` : `xlsx:${fileHashValue}:${sheetName}:${r + 1}`"
-    new_key = "        ...(hasStableId ? {} : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` })"
-    # Remove any unconditional legacy import_key assignment later in the same
-    # payload object: it would override the conditional value for stable IDs.
-    unconditional_key = "        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`"
-    if old_key in app:
-        app = app.replace(old_key, new_key, 1)
-    elif new_key not in app:
-        raise SystemExit("Could not locate stable import_key assignment to patch.")
-    if unconditional_key in app:
-        app = app.replace(unconditional_key, new_key, 1)
+    tick = chr(96)
+    lines = app.splitlines()
+    spread = next((j for j, line in enumerate(lines) if "...(hasStableId ?" in line and "excel-id:" in line), None)
+    if spread is not None:
+        lines[spread] = lines[spread].replace(", import_key: " + tick + "excel-id:${suppliedId}" + tick, "")
+    spread = next((j for j, line in enumerate(lines) if "...(hasStableId ? { id: suppliedId } : { import_key:" in line), None)
+    if spread is None:
+        raise SystemExit("Stable-ID conditional import_key assignment not found.")
+    duplicate = next((j for j, line in enumerate(lines) if line.strip().startswith("import_key:") and "xlsx:" in line and "hasStableId" not in line), None)
+    if duplicate is not None:
+        del lines[duplicate]
+    app = "\n".join(lines) + "\n"
+    if any(line.strip().startswith("import_key:") and "xlsx:" in line and "hasStableId" not in line for line in app.splitlines()):
+        raise SystemExit("Unconditional import_key override remains.")
+    if "upsert(part, { onConflict: 'id' })" not in app:
+        raise SystemExit("Stable-ID upsert behavior is missing.")
     files[target] = (info, app.encode("utf-8"))
     fd, temp_path = tempfile.mkstemp(suffix=".zip", dir=os.path.dirname(os.path.abspath(archive)))
     os.close(fd)
@@ -50,19 +49,15 @@ if "ID movimento" in app and "withStableId" in app:
             if bad:
                 raise SystemExit(f"Patched ZIP is corrupt: {bad}")
             patched = check.read(target).decode("utf-8")
-            if old_key in patched:
-                raise SystemExit("Stable import_key override still present.")
-            if unconditional_key in patched:
-                raise SystemExit("Unconditional import_key assignment still overrides stable IDs.")
-            if new_key not in patched:
-                raise SystemExit("Stable import_key preservation patch is missing.")
-            if "upsert(part, { onConflict: 'id' })" not in patched:
-                raise SystemExit("Stable ID upsert behavior is missing.")
+            if any(line.strip().startswith("import_key:") and "xlsx:" in line and "hasStableId" not in line for line in patched.splitlines()):
+                raise SystemExit("Unconditional import_key override remains in verified ZIP.")
+            if "...(hasStableId ? { id: suppliedId } : { import_key:" not in patched:
+                raise SystemExit("Stable-ID conditional was not preserved in verified ZIP.")
         os.replace(temp_path, archive)
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
-    print("Verified stable IDs are updated without overwriting existing import_key values.")
+    print("Verified: stable-ID rows no longer overwrite import_key.")
     raise SystemExit(0)
 
 def replace_once(old, new, label):
