@@ -41,6 +41,25 @@ jobs:
           test -s Bilancio_Casa_PWA_v0_2_0.zip
           echo "Reconstructed archive size: $(wc -c < Bilancio_Casa_PWA_v0_2_0.zip) bytes"
           python3 patch_archive.py Bilancio_Casa_PWA_v0_2_0.zip
+          python3 - <<'PY'
+          import zipfile
+          archive = "Bilancio_Casa_PWA_v0_2_0.zip"
+          target = "bilancio-casa-pwa/app.js"
+          with zipfile.ZipFile(archive) as z:
+              app = z.read(target).decode("utf-8")
+              required = "...(hasStableId ? {} : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` })"
+              forbidden = "id: suppliedId, import_key: `excel-id:${suppliedId}`"
+              unconditional = "import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`"
+              if required not in app:
+                  raise SystemExit("FAIL: stable-ID key-preservation code is missing.")
+              if forbidden in app:
+                  raise SystemExit("FAIL: stable-ID import_key overwrite remains.")
+              if unconditional in app:
+                  raise SystemExit("FAIL: unconditional import_key overwrite remains.")
+              if "upsert(part, { onConflict: 'id' })" not in app:
+                  raise SystemExit("FAIL: stable-ID upsert by database id is missing.")
+          print("PASS: packaged app preserves stored import_key for stable IDs and upserts by id.")
+          PY
 
       - name: Verify ZIP integrity and list contents
         shell: bash
