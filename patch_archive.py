@@ -40,7 +40,7 @@ replace_once(
 "stable ID import")
 replace_once(
 "        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\n      });",
-"        import_key: hasStableId ? `excel-id:${suppliedId}` : `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\\n      });",
+"        import_key: hasStableId ? `excel-id:${suppliedId}` : `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\n      });",
 "stable import key selection")
 old_batch = """    let insertedBatches = 0;
     for (let i = 0; i < payload.length; i += 150) {
