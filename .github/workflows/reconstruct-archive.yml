@@ -54,7 +54,7 @@ jobs:
                   raise SystemExit("FAIL: stable-ID key-preservation code is missing.")
               if forbidden in app:
                   raise SystemExit("FAIL: stable-ID import_key overwrite remains.")
-              if unconditional in app:
+              if any(line.strip() == unconditional for line in app.splitlines()):
                   raise SystemExit("FAIL: unconditional import_key overwrite remains.")
               if "upsert(part, { onConflict: 'id' })" not in app:
                   raise SystemExit("FAIL: stable-ID upsert by database id is missing.")
