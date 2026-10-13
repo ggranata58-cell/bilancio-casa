@@ -39,7 +39,7 @@ replace_once(
 "      const suppliedId = indexes.id >= 0 ? String(row[indexes.id] ?? '').trim() : '';\n      const hasStableId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedId);\n      payload.push({\n        ...(hasStableId ? { id: suppliedId } : {}),\n        user_id: currentUser.id,\n        movement_date: date,",
 "stable ID import")
 replace_once(
-"        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\\n      });",
+"        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\n      });",
 "        import_key: hasStableId ? `excel-id:${suppliedId}` : `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\\n      });",
 "stable import key selection")
 old_batch = """    let insertedBatches = 0;
