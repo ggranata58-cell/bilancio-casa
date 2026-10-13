@@ -36,8 +36,12 @@ replace_once(
 "Excel ID header detection")
 replace_once(
 "      payload.push({\n        user_id: currentUser.id,\n        movement_date: date,",
-"      const suppliedId = indexes.id >= 0 ? String(row[indexes.id] ?? '').trim() : '';\n      const hasStableId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedId);\n      payload.push({\n        ...(hasStableId ? { id: suppliedId, import_key: `excel-id:${suppliedId}` } : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` }),\n        user_id: currentUser.id,\n        movement_date: date,",
+"      const suppliedId = indexes.id >= 0 ? String(row[indexes.id] ?? '').trim() : '';\n      const hasStableId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedId);\n      payload.push({\n        ...(hasStableId ? { id: suppliedId } : {}),\n        user_id: currentUser.id,\n        movement_date: date,",
 "stable ID import")
+replace_once(
+"        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\\n      });",
+"        import_key: hasStableId ? `excel-id:${suppliedId}` : `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\\n      });",
+"stable import key selection")
 old_batch = """    let insertedBatches = 0;
     for (let i = 0; i < payload.length; i += 150) {
       const part = payload.slice(i, i + 150);
