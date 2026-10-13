@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout test branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Confirm all six parts and ready marker exist
         shell: bash
@@ -49,7 +49,7 @@ jobs:
           test -s archive-contents.txt
 
       - name: Upload verified archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Bilancio_Casa_PWA_v0_2_0-verified
           path: |
