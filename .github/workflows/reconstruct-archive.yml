@@ -1,0 +1,59 @@
+name: Reconstruct and verify Bilancio Casa archive
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - test/sync-bidirezionale
+    paths:
+      - 'Bilancio_Casa_PWA_v0_2_0.zip.b64.part*'
+      - 'Bilancio_Casa_PWA_v0_2_0.zip.b64.ready'
+      - '.github/workflows/reconstruct-archive.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+
+      - name: Confirm all six parts and ready marker exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f Bilancio_Casa_PWA_v0_2_0.zip.b64.ready
+          for part in 01 02 03 04 05 06; do
+            file="Bilancio_Casa_PWA_v0_2_0.zip.b64.part${part}"
+            test -s "$file" || { echo "Missing or empty part: $file"; exit 1; }
+          done
+          echo "All six parts and the ready marker are present."
+
+      - name: Reconstruct Base64 stream and decode ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat Bilancio_Casa_PWA_v0_2_0.zip.b64.part{01,02,03,04,05,06} > archive.b64
+          base64 --decode archive.b64 > Bilancio_Casa_PWA_v0_2_0.zip
+          test -s Bilancio_Casa_PWA_v0_2_0.zip
+          echo "Reconstructed archive size: $(wc -c < Bilancio_Casa_PWA_v0_2_0.zip) bytes"
+
+      - name: Verify ZIP integrity and list contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -t Bilancio_Casa_PWA_v0_2_0.zip
+          unzip -Z1 Bilancio_Casa_PWA_v0_2_0.zip | tee archive-contents.txt
+          test -s archive-contents.txt
+
+      - name: Upload verified archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bilancio_Casa_PWA_v0_2_0-verified
+          path: |
+            Bilancio_Casa_PWA_v0_2_0.zip
+            archive-contents.txt
+          if-no-files-found: error
+          retention-days: 7
