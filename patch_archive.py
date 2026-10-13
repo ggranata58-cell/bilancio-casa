@@ -19,6 +19,11 @@ if target not in files:
 
 info, raw = files[target]
 app = raw.decode("utf-8")
+# Stable-ID rows must carry the database id but omit import_key so Supabase keeps the stored key.
+stable_key_old = "        ...(hasStableId ? { id: suppliedId, import_key: `excel-id:${suppliedId}` } : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` }),"
+stable_key_new = "        ...(hasStableId ? { id: suppliedId } : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` }),"
+if stable_key_old in app:
+    app = app.replace(stable_key_old, stable_key_new, 1)
 if "ID movimento" in app and "withStableId" in app:
     # Stable-ID rows must not send import_key in the upsert payload; omitting it
     # preserves the value already stored in Supabase instead of overwriting it.
