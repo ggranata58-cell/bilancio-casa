@@ -9,6 +9,7 @@ on:
       - 'Bilancio_Casa_PWA_v0_2_0.zip.b64.part*'
       - 'Bilancio_Casa_PWA_v0_2_0.zip.b64.ready'
       - '.github/workflows/reconstruct-archive.yml'
+      - 'patch_archive.py'
 
 permissions:
   contents: read
@@ -39,6 +40,7 @@ jobs:
           base64 --decode archive.b64 > Bilancio_Casa_PWA_v0_2_0.zip
           test -s Bilancio_Casa_PWA_v0_2_0.zip
           echo "Reconstructed archive size: $(wc -c < Bilancio_Casa_PWA_v0_2_0.zip) bytes"
+          python3 patch_archive.py Bilancio_Casa_PWA_v0_2_0.zip
 
       - name: Verify ZIP integrity and list contents
         shell: bash
