@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Scarica il branch di prova
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Ricostruisce e verifica il pacchetto originale
         shell: bash
@@ -61,7 +61,7 @@ jobs:
           PY
 
       - name: Conserva il pacchetto verificato come artefatto di prova
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Bilancio-Casa-test-sync-bidirezionale
           path: |
