@@ -20,11 +20,10 @@ if target not in files:
 info, raw = files[target]
 app = raw.decode("utf-8")
 if "ID movimento" in app and "withStableId" in app:
-    # Some source archives already contain the ID patch but retain a second,
-    # later import_key field that overwrites the stable key in each payload.
-    duplicate_key = "        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\n      });"
+    # The original payload can still overwrite the stable import_key later.
+    duplicate_key = "        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`"
     if "...(hasStableId ? { id: suppliedId, import_key: `excel-id:${suppliedId}` } : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` })," in app and duplicate_key in app:
-        app = app.replace(duplicate_key, "      });", 1)
+        app = app.replace(duplicate_key, "", 1)
         files[target] = (info, app.encode("utf-8"))
         fd, temp_path = tempfile.mkstemp(suffix=".zip", dir=os.path.dirname(os.path.abspath(archive)))
         os.close(fd)
@@ -39,6 +38,8 @@ if "ID movimento" in app and "withStableId" in app:
                 patched = check.read(target).decode("utf-8")
                 if duplicate_key in patched:
                     raise SystemExit("Stable import_key override still present.")
+                if "import_key: `excel-id:${suppliedId}`" not in patched:
+                    raise SystemExit("Stable import_key assignment is missing.")
             os.replace(temp_path, archive)
         finally:
             if os.path.exists(temp_path):
