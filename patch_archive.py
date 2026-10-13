@@ -20,33 +20,37 @@ if target not in files:
 info, raw = files[target]
 app = raw.decode("utf-8")
 if "ID movimento" in app and "withStableId" in app:
-    # The original payload can still overwrite the stable import_key later.
-    duplicate_key = "        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`"
-    if "...(hasStableId ? { id: suppliedId, import_key: `excel-id:${suppliedId}` } : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` })," in app and duplicate_key in app:
-        app = app.replace(duplicate_key, "", 1)
-        files[target] = (info, app.encode("utf-8"))
-        fd, temp_path = tempfile.mkstemp(suffix=".zip", dir=os.path.dirname(os.path.abspath(archive)))
-        os.close(fd)
-        try:
-            with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as dst:
-                for name, (old_info, content) in files.items():
-                    dst.writestr(old_info, content)
-            with zipfile.ZipFile(temp_path, "r") as check:
-                bad = check.testzip()
-                if bad:
-                    raise SystemExit(f"Patched ZIP is corrupt: {bad}")
-                patched = check.read(target).decode("utf-8")
-                if duplicate_key in patched:
-                    raise SystemExit("Stable import_key override still present.")
-                if "import_key: `excel-id:${suppliedId}`" not in patched:
-                    raise SystemExit("Stable import_key assignment is missing.")
-            os.replace(temp_path, archive)
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-        print("Removed duplicate import_key override and verified stable Excel movement IDs.")
-    else:
-        print("Bidirectional Excel-ID improvement already applied; no duplicate import_key override found.")
+    # Stable-ID rows must not send import_key in the upsert payload; omitting it
+    # preserves the value already stored in Supabase instead of overwriting it.
+    old_key = "        import_key: hasStableId ? `excel-id:${suppliedId}` : `xlsx:${fileHashValue}:${sheetName}:${r + 1}`"
+    new_key = "        ...(hasStableId ? {} : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` })"
+    if old_key in app:
+        app = app.replace(old_key, new_key, 1)
+    elif new_key not in app:
+        raise SystemExit("Could not locate stable import_key assignment to patch.")
+    files[target] = (info, app.encode("utf-8"))
+    fd, temp_path = tempfile.mkstemp(suffix=".zip", dir=os.path.dirname(os.path.abspath(archive)))
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as dst:
+            for name, (old_info, content) in files.items():
+                dst.writestr(old_info, content)
+        with zipfile.ZipFile(temp_path, "r") as check:
+            bad = check.testzip()
+            if bad:
+                raise SystemExit(f"Patched ZIP is corrupt: {bad}")
+            patched = check.read(target).decode("utf-8")
+            if old_key in patched:
+                raise SystemExit("Stable import_key override still present.")
+            if new_key not in patched:
+                raise SystemExit("Stable import_key preservation patch is missing.")
+            if "upsert(part, { onConflict: 'id' })" not in patched:
+                raise SystemExit("Stable ID upsert behavior is missing.")
+        os.replace(temp_path, archive)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+    print("Verified stable IDs are updated without overwriting existing import_key values.")
     raise SystemExit(0)
 
 def replace_once(old, new, label):
@@ -66,7 +70,7 @@ replace_once(
 "stable ID import")
 replace_once(
 "        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\n      });",
-"        import_key: hasStableId ? `excel-id:${suppliedId}` : `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\n      });",
+"        ...(hasStableId ? {} : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` })\n      });",
 "stable import key selection")
 old_batch = """    let insertedBatches = 0;
     for (let i = 0; i < payload.length; i += 150) {
