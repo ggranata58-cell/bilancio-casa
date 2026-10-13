@@ -20,7 +20,32 @@ if target not in files:
 info, raw = files[target]
 app = raw.decode("utf-8")
 if "ID movimento" in app and "withStableId" in app:
-    print("Bidirectional Excel-ID improvement already applied.")
+    # Some source archives already contain the ID patch but retain a second,
+    # later import_key field that overwrites the stable key in each payload.
+    duplicate_key = "        import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}`\n      });"
+    if "...(hasStableId ? { id: suppliedId, import_key: `excel-id:${suppliedId}` } : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` })," in app and duplicate_key in app:
+        app = app.replace(duplicate_key, "      });", 1)
+        files[target] = (info, app.encode("utf-8"))
+        fd, temp_path = tempfile.mkstemp(suffix=".zip", dir=os.path.dirname(os.path.abspath(archive)))
+        os.close(fd)
+        try:
+            with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as dst:
+                for name, (old_info, content) in files.items():
+                    dst.writestr(old_info, content)
+            with zipfile.ZipFile(temp_path, "r") as check:
+                bad = check.testzip()
+                if bad:
+                    raise SystemExit(f"Patched ZIP is corrupt: {bad}")
+                patched = check.read(target).decode("utf-8")
+                if duplicate_key in patched:
+                    raise SystemExit("Stable import_key override still present.")
+            os.replace(temp_path, archive)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        print("Removed duplicate import_key override and verified stable Excel movement IDs.")
+    else:
+        print("Bidirectional Excel-ID improvement already applied; no duplicate import_key override found.")
     raise SystemExit(0)
 
 def replace_once(old, new, label):
