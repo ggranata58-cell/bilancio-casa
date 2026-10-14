@@ -76,7 +76,7 @@ jobs:
           checks = {
               "usa il progetto Supabase corretto": "bstcydrgyspgofckzybl.supabase.co" in macro,
               "autenticazione password senza salvare la password": "/auth/v1/token?grant_type=password" in macro and "password = vbNullString" in macro,
-              "non invia modifiche Excel su ID già esistenti senza confronto": "Rimandato: prima serve confronto con lo snapshot" in macro and 'HttpRequest("PATCH", url, body' not in macro,
+              "sincronizza modifiche Excel con snapshot": "LoadSyncSnapshot(snapshotWs)" in macro and "ExcelRowMatchesSnapshot" in macro and "PatchMovementFromExcel" in macro,
               "scarica il database prima di elaborare le righe Excel": macro.index("Prima scarica il database") < macro.index("For r = headerRow + 1 To lastRow"),
               "conserva il CSV remoto durante i nuovi inserimenti": "remoteCsv = response" in macro and "stm.WriteText remoteCsv" in macro,
               "interrompe sui conflitti prima di sovrascrivere Excel": "ExcelRowMatchesRemote" in macro and "Conflitto sul movimento ID" in macro and "Nessuna delle due versioni è stata sovrascritta" in macro,
