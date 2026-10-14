@@ -474,9 +474,6 @@ jobs:
           # al formato italiano "ottobre 2026". Non modifica input o dati salvati.
           desktop_month_script = r"""<script>
           (() => {
-            const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-              (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-            if (isPhone) return;
             const formatMonth = value => {
               const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value.trim());
               if (!match) return null;
@@ -493,8 +490,9 @@ jobs:
               for (const node of nodes) {
                 const parent = node.parentElement;
                 if (!parent || /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT)$/i.test(parent.tagName)) continue;
-                const formatted = formatMonth(node.nodeValue || '');
-                if (formatted) node.nodeValue = formatted;
+                const original = node.nodeValue || '';
+                const updated = original.replace(/(\d{4})-(0[1-9]|1[0-2])/g, value => formatMonth(value));
+                if (updated !== original) node.nodeValue = updated;
               }
             };
             const start = () => {
@@ -504,8 +502,9 @@ jobs:
                   if (record.type === 'characterData') scan(record.target.parentElement);
                   for (const added of record.addedNodes || []) {
                     if (added.nodeType === Node.TEXT_NODE) {
-                      const formatted = formatMonth(added.nodeValue || '');
-                      if (formatted && added.parentElement) added.nodeValue = formatted;
+                      const original = added.nodeValue || '';
+                      const updated = original.replace(/(\d{4})-(0[1-9]|1[0-2])/g, value => formatMonth(value));
+                      if (updated !== original && added.parentElement) added.nodeValue = updated;
                     } else if (added.nodeType === Node.ELEMENT_NODE) scan(added);
                   }
                 }
