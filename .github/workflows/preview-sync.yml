@@ -1,0 +1,69 @@
+name: Pubblica anteprima sincronizzazione senza sostituire la home
+
+on:
+  push:
+    branches:
+      - test/sync-bidirezionale
+    paths:
+      - '.github/workflows/preview-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout ramo di prova
+        uses: actions/checkout@v4
+
+      - name: Recupera la pubblicazione attuale senza modificarla
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          wget --mirror --page-requisites --convert-links --adjust-extension --no-parent \
+            --directory-prefix=mirror https://ggranata58-cell.github.io/bilancio-casa/
+          test -s mirror/ggranata58-cell.github.io/bilancio-casa/index.html
+          cp -a mirror/ggranata58-cell.github.io/bilancio-casa/. public/
+          test -s public/index.html
+          echo "Pubblicazione esistente copiata; se il mirror non è completo il workflow si ferma prima del deploy."
+
+      - name: Ricostruisce e verifica il pacchetto di prova
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f Bilancio_Casa_PWA_v0_2_0.zip.b64.ready
+          cat Bilancio_Casa_PWA_v0_2_0.zip.b64.part{01,02,03,04,05,06} | base64 --decode > Bilancio_Casa_PWA_v0_2_0.zip
+          echo "394b3317a48742bfed152e9ec1bd00e9b339139fe12a1092a76461a5b43ca9f6  Bilancio_Casa_PWA_v0_2_0.zip" | sha256sum --check
+          unzip -tq Bilancio_Casa_PWA_v0_2_0.zip
+          python3 patch_archive.py Bilancio_Casa_PWA_v0_2_0.zip
+          mkdir extracted
+          unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
+          node --check extracted/bilancio-casa-pwa/app.js
+          mkdir -p public/preview
+          cp -a extracted/bilancio-casa-pwa/. public/preview/
+          test -s public/preview/index.html
+          echo "Anteprima di prova preparata in /preview/."
+
+      - name: Configura GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Carica sito esistente più anteprima
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Pubblica sito preservato con anteprima separata
+        id: deployment
+        uses: actions/deploy-pages@v4
