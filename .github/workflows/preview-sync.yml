@@ -478,7 +478,7 @@ jobs:
               (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
             if (isPhone) return;
             const formatMonth = value => {
-              const match = /^(\\d{4})-(0[1-9]|1[0-2])$/.exec(value.trim());
+              const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value.trim());
               if (!match) return null;
               const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
               return new Intl.DateTimeFormat('it-IT', {
@@ -516,7 +516,7 @@ jobs:
           })();
           </script>"""
           if 'desktop-month-format-fix' not in html:
-              html = html.replace('</body>', desktop_month_script.replace('<script>', '<script id="desktop-month-format-fix">') + '\\n</body>', 1)
+              html = html.replace('</body>', desktop_month_script.replace('<script>', '<script id="desktop-month-format-fix">') + '\n</body>', 1)
 
           html_path.write_text(html, encoding="utf-8")
 
