@@ -29,7 +29,11 @@ jobs:
         run: |
           set -euo pipefail
           test -f Bilancio_Casa_PWA_v0_2_0.zip.b64.ready
-          cat Bilancio_Casa_PWA_v0_2_0.zip.b64.part0* | base64 --decode > Bilancio_Casa_PWA_v0_2_0.zip
+          for part in 01 02 03 04 05 06; do
+            file="Bilancio_Casa_PWA_v0_2_0.zip.b64.part${part}"
+            test -s "$file" || { echo "Missing or empty part: $file"; exit 1; }
+          done
+          cat Bilancio_Casa_PWA_v0_2_0.zip.b64.part{01,02,03,04,05,06} | base64 --decode > Bilancio_Casa_PWA_v0_2_0.zip
           echo "394b3317a48742bfed152e9ec1bd00e9b339139fe12a1092a76461a5b43ca9f6  Bilancio_Casa_PWA_v0_2_0.zip" | sha256sum --check
           unzip -tq Bilancio_Casa_PWA_v0_2_0.zip
           python3 patch_archive.py Bilancio_Casa_PWA_v0_2_0.zip
