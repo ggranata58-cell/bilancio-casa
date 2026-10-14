@@ -76,33 +76,15 @@ Public Sub SincronizzaBilancioCasaDiretto()
     If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 710, , "Errore scaricando i movimenti (HTTP " & httpStatus & "): " & Left$(response, 300)
     remoteCsv = response
 
+    ' Pre-controllo dei dati Excel: nessuna scrittura al database in questa fase.
     For r = headerRow + 1 To lastRow
         If Len(Trim$(CStr(ws.Cells(r, hdr("concetto")).Value))) > 0 And IsDate(ws.Cells(r, hdr("data")).Value) Then
             If Not IsNumeric(ws.Cells(r, hdr("importo")).Value) Or CDbl(ws.Cells(r, hdr("importo")).Value) <= 0 Then
-                Err.Raise vbObjectError + 705, , "Importo non valido alla riga " & r & ". Nessuna altra riga verrà sincronizzata."
+                Err.Raise vbObjectError + 705, , "Importo non valido alla riga " & r & ". Nessuna riga verrà sincronizzata."
             End If
             Dim movementType As String
             movementType = Trim$(CStr(ws.Cells(r, hdr("tipo")).Value))
             If movementType <> "Entrata" And movementType <> "Uscita" Then Err.Raise vbObjectError + 706, , "Tipo non valido alla riga " & r & ": usare Entrata o Uscita."
-            body = "{""user_id"":" & JsonString(userId) & _
-                ",""movement_date"":" & JsonString(Format$(CDate(ws.Cells(r, hdr("data")).Value), "yyyy-mm-dd")) & _
-                ",""concept"":" & JsonString(CStr(ws.Cells(r, hdr("concetto")).Value)) & _
-                ",""category"":" & JsonString(CStr(ws.Cells(r, hdr("categoria")).Value)) & _
-                ",""movement_type"":" & JsonString(movementType) & _
-                ",""amount"":" & Replace(Format$(CDbl(ws.Cells(r, hdr("importo")).Value), "0.00"), ",", ".") & _
-                ",""notes"":" & JsonString(IIf(hdr.Exists("note"), CStr(ws.Cells(r, hdr("note")).Value), "")) & "}"
-            id = Trim$(CStr(ws.Cells(r, idCol).Value))
-            If Len(id) > 0 Then
-                ' Rimandato: prima serve confronto con lo snapshot dell'ultima sincronizzazione riuscita.
-            Else
-                response = HttpRequest("POST", SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?select=id", body, "application/json", token, httpStatus, "return=representation")
-                If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 708, , "Errore inserendo la riga " & r & " (HTTP " & httpStatus & "): " & Left$(response, 300)
-                id = JsonGetString(response, "id")
-                If Len(id) = 0 Then Err.Raise vbObjectError + 709, , "Il server non ha restituito l'ID del nuovo movimento alla riga " & r
-                ws.Cells(r, idCol).Value = id
-                newIds(id) = True
-                sent = sent + 1: added = added + 1
-            End If
         End If
     Next r
 
@@ -175,6 +157,41 @@ Public Sub SincronizzaBilancioCasaDiretto()
         End If
     Next k
 
+    ' Solo dopo aver verificato tutti gli ID esistenti, invia le righe Excel senza ID.
+    ' Le nuove righe vengono aggiunte anche alla copia remota in memoria per la riconciliazione finale.
+    For r = headerRow + 1 To lastRow
+        If Len(Trim$(CStr(ws.Cells(r, hdr("concetto")).Value))) > 0 And IsDate(ws.Cells(r, hdr("data")).Value) Then
+            id = Trim$(CStr(ws.Cells(r, idCol).Value))
+            If Len(id) = 0 Then
+                body = "{""user_id"":" & JsonString(userId) & _
+                    ",""movement_date"":" & JsonString(Format$(CDate(ws.Cells(r, hdr("data")).Value), "yyyy-mm-dd")) & _
+                    ",""concept"":" & JsonString(CStr(ws.Cells(r, hdr("concetto")).Value)) & _
+                    ",""category"":" & JsonString(CStr(ws.Cells(r, hdr("categoria")).Value)) & _
+                    ",""movement_type"":" & JsonString(Trim$(CStr(ws.Cells(r, hdr("tipo")).Value))) & _
+                    ",""amount"":" & Replace(Format$(CDbl(ws.Cells(r, hdr("importo")).Value), "0.00"), ",", ".") & _
+                    ",""notes"":" & JsonString(IIf(hdr.Exists("note"), CStr(ws.Cells(r, hdr("note")).Value), "")) & "}"
+                response = HttpRequest("POST", SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?select=id", body, "application/json", token, httpStatus, "return=representation")
+                If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 708, , "Errore inserendo la riga " & r & " (HTTP " & httpStatus & "): " & Left$(response, 300)
+                id = JsonGetString(response, "id")
+                If Len(id) = 0 Then Err.Raise vbObjectError + 709, , "Il server non ha restituito l'ID del nuovo movimento alla riga " & r
+                ws.Cells(r, idCol).Value = id
+                newIds(id) = True
+                rowById.Add id, r
+                apiLast = apiLast + 1
+                ar = apiLast
+                tmpWs.Cells(ar, apiHdr("id")).Value = id
+                tmpWs.Cells(ar, apiHdr("movement_date")).Value = Format$(CDate(ws.Cells(r, hdr("data")).Value), "yyyy-mm-dd")
+                tmpWs.Cells(ar, apiHdr("concept")).Value = ws.Cells(r, hdr("concetto")).Value
+                tmpWs.Cells(ar, apiHdr("category")).Value = ws.Cells(r, hdr("categoria")).Value
+                tmpWs.Cells(ar, apiHdr("movement_type")).Value = ws.Cells(r, hdr("tipo")).Value
+                tmpWs.Cells(ar, apiHdr("amount")).Value = CDbl(ws.Cells(r, hdr("importo")).Value)
+                tmpWs.Cells(ar, apiHdr("notes")).Value = IIf(hdr.Exists("note"), ws.Cells(r, hdr("note")).Value, "")
+                apiRows(id) = ar
+                sent = sent + 1
+            End If
+        End If
+    Next r
+
     For ar = 2 To apiLast
         id = Trim$(CStr(tmpWs.Cells(ar, apiIdCol).Value))
         If Len(id) > 0 Then
@@ -207,7 +224,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
         "Nuovi movimenti inviati da Excel: " & sent & vbCrLf & "Nuovi ID assegnati: " & added & vbCrLf & _
         "Movimenti ricevuti dal database: " & downloaded & vbCrLf & _
         "Nessun movimento è stato cancellato." & vbCrLf & _
-        "Nota: le modifiche su ID esistenti non vengono ancora propagate. Se Excel e app differiscono, la macro si ferma per proteggere entrambe le versioni.", vbInformation
+        "Le modifiche univoche sono state riconciliate; in caso di conflitto la macro si ferma senza sovrascrivere le versioni diverse.", vbInformation
     Exit Sub
 
 Fail:
