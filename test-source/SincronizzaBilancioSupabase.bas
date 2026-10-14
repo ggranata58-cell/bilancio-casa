@@ -65,7 +65,11 @@ Public Sub SincronizzaBilancioCasaDiretto()
         lastRow = ws.Cells(ws.Rows.Count, idCol).End(xlUp).Row
     End If
 
-    ' IMPORTANTE: questa versione NON è ancora sicura per modifiche concorrenti. Non inviare record esistenti prima del confronto remoto.
+    ' Prima scarica il database: non inviare righe Excel con ID esistente senza confronto con uno snapshot.
+    url = SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?select=id,movement_date,concept,category,movement_type,amount,notes&user_id=eq." & userId & "&order=movement_date.asc"
+    response = HttpRequest("GET", url, "", "text/csv", token, httpStatus)
+    If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 710, , "Errore scaricando i movimenti (HTTP " & httpStatus & "): " & Left$(response, 300)
+
     For r = headerRow + 1 To lastRow
         If Len(Trim$(CStr(ws.Cells(r, hdr("concetto")).Value))) > 0 And IsDate(ws.Cells(r, hdr("data")).Value) Then
             If Not IsNumeric(ws.Cells(r, hdr("importo")).Value) Or CDbl(ws.Cells(r, hdr("importo")).Value) <= 0 Then
