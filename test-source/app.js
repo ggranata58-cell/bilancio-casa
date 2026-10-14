@@ -706,17 +706,17 @@
       settings = { opening_date: opening.opening_date, opening_balance: opening.opening_balance, daily_budget: settings.daily_budget };
     }
     const withStableId = payload.filter(m => m.id);
-    const withoutStableId = payload.filter(m => !m.id);
-    for (let i = 0; i < withStableId.length; i += 150) {
-      const part = withStableId.slice(i, i + 150);
-      const { error } = await db.from('bilancio_movements').upsert(part, { onConflict: 'id' });
-      if (error) throw error;
-    }
-    for (let i = 0; i < withoutStableId.length; i += 150) {
-      const part = withoutStableId.slice(i, i + 150);
-      const { error } = await db.from('bilancio_movements').upsert(part, { onConflict: 'user_id,import_key', ignoreDuplicates: true });
-      if (error) throw error;
-    }
+        const withoutStableId = payload.filter(m => !m.id);
+        for (let i = 0; i < withStableId.length; i += 150) {
+          const part = withStableId.slice(i, i + 150);
+          const { error } = await db.from('bilancio_movements').upsert(part, { onConflict: 'id' });
+          if (error) throw error;
+        }
+        for (let i = 0; i < withoutStableId.length; i += 150) {
+          const part = withoutStableId.slice(i, i + 150);
+          const { error } = await db.from('bilancio_movements').upsert(part, { onConflict: 'user_id,import_key', ignoreDuplicates: true });
+          if (error) throw error;
+        }
     await refreshData();
     setView('dashboard');
     showNotice(`Importazione completata. Elaborate ${payload.length} righe${skipped ? `; ignorate ${skipped} righe vuote o non utilizzabili` : ''}. Le righe con ID movimento mantengono la propria identità tra esportazioni e reimportazioni; le righe senza ID usano il sistema di importazione precedente.`, 'ok');
