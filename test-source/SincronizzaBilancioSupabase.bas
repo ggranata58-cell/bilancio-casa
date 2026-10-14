@@ -17,7 +17,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     Dim headerRow As Long, lastRow As Long, idCol As Long, c As Long, r As Long
     Dim id As String, body As String, url As String, response As String, remoteCsv As String
     Dim sent As Long, added As Long, downloaded As Long, updated As Long
-    Dim oldCalc As XlCalculation, oldEvents As Boolean, oldScreen As Boolean
+    Dim oldCalc As XlCalculation, oldEvents As Boolean, oldScreen As Boolean, settingsSaved As Boolean
     Dim lo As ListObject, targetTable As ListObject, newRow As ListRow
     Dim data As Object, tmpWb As Workbook, tmpWs As Worksheet
     Dim excelChanged As Boolean, remoteChanged As Boolean, snapVals As Variant
@@ -37,6 +37,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     oldCalc = Application.Calculation
     oldEvents = Application.EnableEvents
     oldScreen = Application.ScreenUpdating
+    settingsSaved = True
     Application.ScreenUpdating = False
     Application.EnableEvents = False
     Application.Calculation = xlCalculationManual
@@ -107,19 +108,30 @@ Public Sub SincronizzaBilancioCasaDiretto()
     ' Indicizza i record remoti prima di modificare il foglio Excel.
     For ar = 2 To apiLast
         id = Trim$(CStr(tmpWs.Cells(ar, apiIdCol).Value))
-        If Len(id) > 0 Then apiRows(id) = ar
+        If Len(id) > 0 Then
+            If apiRows.Exists(id) Then Err.Raise vbObjectError + 715, , "ID duplicato nella risposta Supabase: " & id & ". Nessuna sincronizzazione prosegue."
+            apiRows.Add id, ar
+        End If
     Next ar
 
     Set rowById = CreateObject("Scripting.Dictionary"): rowById.CompareMode = vbTextCompare
     If Not targetTable Is Nothing Then
         If Not targetTable.DataBodyRange Is Nothing Then
             For r = targetTable.DataBodyRange.Row To targetTable.DataBodyRange.Row + targetTable.DataBodyRange.Rows.Count - 1
-                id = Trim$(CStr(ws.Cells(r, idCol).Value)): If Len(id) > 0 Then If Not rowById.Exists(id) Then rowById.Add id, r
+                id = Trim$(CStr(ws.Cells(r, idCol).Value))
+                If Len(id) > 0 Then
+                    If rowById.Exists(id) Then Err.Raise vbObjectError + 716, , "ID duplicato in Excel: " & id & " (righe " & rowById(id) & " e " & r & "). Nessuna sincronizzazione prosegue."
+                    rowById.Add id, r
+                End If
             Next r
         End If
     Else
         For r = headerRow + 1 To ws.Cells(ws.Rows.Count, idCol).End(xlUp).Row
-            id = Trim$(CStr(ws.Cells(r, idCol).Value)): If Len(id) > 0 Then If Not rowById.Exists(id) Then rowById.Add id, r
+            id = Trim$(CStr(ws.Cells(r, idCol).Value))
+            If Len(id) > 0 Then
+                If rowById.Exists(id) Then Err.Raise vbObjectError + 716, , "ID duplicato in Excel: " & id & " (righe " & rowById(id) & " e " & r & "). Nessuna sincronizzazione prosegue."
+                rowById.Add id, r
+            End If
         Next r
     End If
 
@@ -249,7 +261,11 @@ Fail:
     password = vbNullString
     If Not tmpWb Is Nothing Then tmpWb.Close SaveChanges:=False
     If Len(tempPath) > 0 Then If Len(Dir$(tempPath)) > 0 Then Kill tempPath
-    Application.Calculation = oldCalc: Application.EnableEvents = oldEvents: Application.ScreenUpdating = oldScreen
+    If settingsSaved Then
+        Application.Calculation = oldCalc
+        Application.EnableEvents = oldEvents
+        Application.ScreenUpdating = oldScreen
+    End If
     On Error GoTo 0
     MsgBox errText, vbExclamation, "Sincronizzazione Bilancio Casa"
 End Sub
@@ -393,6 +409,7 @@ Private Function LoadSyncSnapshot(ByVal snapWs As Worksheet) As Object
     For r = 2 To last
         id = Trim$(CStr(snapWs.Cells(r, 1).Value))
         If Len(id) > 0 Then
+            If d.Exists(id) Then Err.Raise vbObjectError + 717, , "ID duplicato nello snapshot _SyncBilancio: " & id & ". Non è sicuro continuare."
             vals(1) = snapWs.Cells(r, 2).Value
             vals(2) = snapWs.Cells(r, 3).Value
             vals(3) = snapWs.Cells(r, 4).Value
