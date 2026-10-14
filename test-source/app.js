@@ -24,6 +24,8 @@
   let authMode = 'signin';
   let pendingInstallPrompt = null;
   let noticeTimer = null;
+  let cloudCashBalance = null;
+  let cashCloudAvailable = false;
 
   function money(value) { return euro.format(Number(value) || 0); }
   function normText(value) {
@@ -162,6 +164,7 @@
     showNotice('Accesso riuscito. Sto caricando movimenti e riepiloghi…', 'info');
     try {
       await loadSettings();
+      await loadCashBalance();
       await loadMovements();
       defaultMovementForm();
       $('periodMonth').value = todayMonth();
@@ -325,6 +328,7 @@
   const CASH_BALANCE_KEY_PREFIX = 'bilancio-casa-cash-balance-v1:';
   function cashBalanceKey() { return CASH_BALANCE_KEY_PREFIX + (currentUser?.id || 'local'); }
   function readCashBalance() {
+    if (cloudCashBalance !== null) return cloudCashBalance;
     try {
       const raw = localStorage.getItem(cashBalanceKey());
       if (raw === null) {
@@ -354,7 +358,7 @@
             <div><span class="small-note">Prelievi nel mese selezionato</span><strong id="cashMonthWithdrawals">—</strong></div>
             <div><span class="small-note">Prelievi complessivi registrati</span><strong id="cashTotalWithdrawals">—</strong></div>
           </div>
-          <p class="small-note">Il saldo contanti viene salvato su questo dispositivo e non si sincronizza automaticamente con altri dispositivi.</p>
+          <p id="cashSyncStatus" class="small-note">Caricamento del saldo contanti…</p>
         </section>`);
       panel = $('cashSummaryPanel');
     }
@@ -365,21 +369,83 @@
     $('cashBalanceInput').value = readCashBalance().toFixed(2);
     $('cashMonthWithdrawals').textContent = money(monthTotal);
     $('cashTotalWithdrawals').textContent = money(allTotal);
+    const syncStatus = $('cashSyncStatus');
+    if (syncStatus && cashCloudAvailable) syncStatus.textContent = 'Saldo sincronizzato con il cloud: disponibile sugli altri dispositivi con lo stesso account.';
   }
 
-  function saveCashBalance() {
+  async function loadCashBalance() {
+    const key = cashBalanceKey();
+    let localValue = null;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw !== null && Number.isFinite(Number(raw))) localValue = Math.max(0, Number(raw));
+    } catch (_) {}
+    const { data, error } = await db.from('bilancio_cash_settings')
+      .select('cash_balance').eq('user_id', currentUser.id).maybeSingle();
+    if (error) {
+      cloudCashBalance = localValue === null ? 50 : localValue;
+      cashCloudAvailable = false;
+      renderCashPanel();
+      const status = $('cashSyncStatus');
+      if (status) status.textContent = 'Saldo salvato solo su questo dispositivo: per sincronizzarlo serve attivare la tabella cloud dedicata.';
+      return;
+    }
+    cashCloudAvailable = true;
+    if (data) {
+      cloudCashBalance = Math.max(0, Number(data.cash_balance) || 0);
+    } else {
+      cloudCashBalance = localValue === null ? 50 : localValue;
+      const { error: insertError } = await db.from('bilancio_cash_settings').upsert({
+        user_id: currentUser.id,
+        cash_balance: Math.round(cloudCashBalance * 100) / 100,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (insertError) {
+        cashCloudAvailable = false;
+      }
+    }
+    try { localStorage.setItem(key, cloudCashBalance.toFixed(2)); } catch (_) {}
+    renderCashPanel();
+  }
+
+  async function saveCashBalance() {
     const input = $('cashBalanceInput');
     const value = Number(String(input.value).replace(',', '.'));
     if (!Number.isFinite(value) || value < 0) {
       showNotice('Inserisci un saldo contanti valido, pari o superiore a zero.', 'error');
       return;
     }
+    const rounded = Math.round(value * 100) / 100;
+    if (!cashCloudAvailable) {
+      try {
+        localStorage.setItem(cashBalanceKey(), rounded.toFixed(2));
+        cloudCashBalance = rounded;
+        input.value = rounded.toFixed(2);
+        showNotice('Saldo contanti salvato su questo dispositivo. La sincronizzazione cloud non è attiva.', 'info');
+        renderCashPanel();
+      } catch (_) {
+        showNotice('Non riesco a salvare il saldo contanti nel browser.', 'error');
+      }
+      return;
+    }
+    const button = $('saveCashBalanceBtn');
+    setButtonBusy(button, true, 'Salvataggio…');
     try {
-      localStorage.setItem(cashBalanceKey(), (Math.round(value * 100) / 100).toFixed(2));
-      input.value = (Math.round(value * 100) / 100).toFixed(2);
-      showNotice('Saldo contanti aggiornato su questo dispositivo.');
-    } catch (_) {
-      showNotice('Non riesco a salvare il saldo contanti nel browser.', 'error');
+      const { error } = await db.from('bilancio_cash_settings').upsert({
+        user_id: currentUser.id,
+        cash_balance: rounded,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (error) throw error;
+      cloudCashBalance = rounded;
+      try { localStorage.setItem(cashBalanceKey(), rounded.toFixed(2)); } catch (_) {}
+      input.value = rounded.toFixed(2);
+      renderCashPanel();
+      showNotice('Saldo contanti salvato e sincronizzato.');
+    } catch (error) {
+      showNotice('Errore nel salvataggio cloud del saldo contanti: ' + (error?.message || error), 'error');
+    } finally {
+      setButtonBusy(button, false);
     }
   }
 
