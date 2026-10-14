@@ -122,6 +122,32 @@ replace_once(
 "      rows.push([m.id || '', csvDate(m.movement_date), '', m.concept, m.category, m.movement_type, csvNumber(m.amount), csvNumber(signed(m)), csvNumber(balance), monthName, m.notes || '']);",
 "CSV movement ID export")
 
+
+replace_once(
+"    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro'\\n  ];\\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';",
+"    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro',\\n    'Movimenti esclusi', 'Prelievo contanti'\\n  ];\\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';\\n  const EXCLUDED_CATEGORIES = new Set(['Movimenti esclusi', 'Prelievo contanti', 'Imposte e tasse', SPECIAL_CATEGORY]);\\n  function isExcludedMovement(m) { return EXCLUDED_CATEGORIES.has(m.category); }",
+"excluded movement categories")
+replace_once(
+"    const expenses = rows.filter(m => m.movement_type === 'Uscita').reduce((s, m) => s + m.amount, 0);",
+"    const expenses = rows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);\\n    const excludedOutflows = rows.filter(m => m.movement_type === 'Uscita' && isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);",
+"separate ordinary and excluded expenses")
+replace_once(
+"return { ym, rows, income, expenses, budgetAllocated, taxReserve, budgetRemainder, monthOpen, closing, dayCount };",
+"return { ym, rows, income, expenses, excludedOutflows, budgetAllocated, taxReserve, budgetRemainder, monthOpen, closing, dayCount };",
+"return excluded total")
+replace_once(
+"    for (const m of rows) {\\n      if (m.category === SPECIAL_CATEGORY) {\\n        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));\\n      } else if (m.movement_type === 'Uscita') {\\n        totals.set(m.category, (totals.get(m.category) || 0) + m.amount);\\n      }\\n    }",
+"    for (const m of rows) {\\n      if (isExcludedMovement(m)) {\\n        const label = 'Movimenti esclusi';\\n        totals.set(label, (totals.get(label) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));\\n      } else if (m.movement_type === 'Uscita') {\\n        totals.set(m.category, (totals.get(m.category) || 0) + m.amount);\\n      }\\n    }",
+"separate category totals")
+replace_once(
+"    $('statExpenses').textContent = money(s.expenses);",
+"    $('statExpenses').textContent = money(s.expenses);\\n    $('statExpenses').title = `Spese ordinarie: ${money(s.expenses)}. Uscite escluse dal budget: ${money(s.excludedOutflows)}.`;",
+"excluded expense tooltip")
+replace_once(
+"      rows.push([m.id || '', csvDate(m.movement_date), '', m.concept, m.category, m.movement_type, csvNumber(m.amount), csvNumber(signed(m)), csvNumber(balance), monthName, m.notes || '']);",
+"      rows.push([m.id || '', csvDate(m.movement_date), '', m.concept, m.category, m.movement_type, csvNumber(m.amount), csvNumber(signed(m)), csvNumber(balance), monthName, [m.notes || '', isExcludedMovement(m) ? 'ESCLUSO DALLE SPESE ORDINARIE' : ''].filter(Boolean).join(' | ')]);",
+"CSV excluded note");
+
 files[target] = (info, app.encode("utf-8"))
 fd, temp_path = tempfile.mkstemp(suffix=".zip", dir=os.path.dirname(os.path.abspath(archive)))
 os.close(fd)
