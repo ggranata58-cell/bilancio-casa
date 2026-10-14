@@ -13,7 +13,7 @@ Private Const TABLE_NAME As String = "bilancio_movements"
 
 Public Sub SincronizzaBilancioCasaDiretto()
     Dim email As String, password As String, token As String, userId As String
-    Dim ws As Worksheet, hdr As Object, rowById As Object, apiRows As Object, newIds As Object
+    Dim ws As Worksheet, snapshotWs As Worksheet, hdr As Object, rowById As Object, apiRows As Object, newIds As Object
     Dim headerRow As Long, lastRow As Long, idCol As Long, c As Long, r As Long
     Dim id As String, body As String, url As String, response As String, remoteCsv As String
     Dim sent As Long, added As Long, downloaded As Long, updated As Long
@@ -25,6 +25,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
 
     On Error GoTo Fail
     Set ws = ThisWorkbook.Worksheets("Movimenti")
+    Set snapshotWs = GetOrCreateSyncSheet(ThisWorkbook)
     Set newIds = CreateObject("Scripting.Dictionary"): newIds.CompareMode = vbTextCompare
     email = InputBox("Inserisci l'email usata per accedere a Bilancio Casa:", "Sincronizzazione diretta")
     If Len(Trim$(email)) = 0 Then Exit Sub
