@@ -76,7 +76,8 @@ jobs:
           checks = {
               "usa il progetto Supabase corretto": "bstcydrgyspgofckzybl.supabase.co" in macro,
               "autenticazione password senza salvare la password": "/auth/v1/token?grant_type=password" in macro and "password = vbNullString" in macro,
-              "usa l'ID stabile per aggiornare": '"?id=eq." & id & "&user_id=eq." & userId' in macro,
+              "non invia modifiche Excel su ID già esistenti senza confronto": "Rimandato: prima serve confronto con lo snapshot" in macro and 'HttpRequest("PATCH", url, body' not in macro,
+              "scarica il database prima di elaborare le righe Excel": macro.index("Prima scarica il database") < macro.index("For r = headerRow + 1 To lastRow"),
               "inserisce nuovi movimenti e recupera l'ID": '"/rest/v1/" & TABLE_NAME & "?select=id"' in macro and 'JsonGetString(response, "id")' in macro,
               "scarica i movimenti dal database": '"/rest/v1/" & TABLE_NAME & "?select=id,movement_date,concept,category,movement_type,amount,notes&user_id=eq."' in macro,
               "non cancella movimenti": "cancellato" in macro and "DELETE" not in macro,
