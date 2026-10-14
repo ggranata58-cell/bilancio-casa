@@ -255,8 +255,8 @@ replace_once(
 "separate category totals")
 replace_once(
 "    $('statExpenses').textContent = money(s.expenses);",
-"    $('statExpenses').textContent = money(s.expenses);\n    $('statExpenses').title = `Spese ordinarie: ${money(s.expenses)}. Uscite escluse dal budget: ${money(s.excludedOutflows)}.`;",
-"excluded expense tooltip")
+"    $('statExpenses').textContent = money(s.expenses);\n    $('statExpenses').title = `Spese ordinarie: ${money(s.expenses)}. Uscite escluse dal budget: ${money(s.excludedOutflows)}.`;\n    let excludedExpensesLabel = $('statExcludedExpenses');\n    if (!excludedExpensesLabel) {\n      $('statExpenses').insertAdjacentHTML('afterend', '<div id=\"statExcludedExpenses\" class=\"small-note\" style=\"margin-top:.35rem\"></div>');\n      excludedExpensesLabel = $('statExcludedExpenses');\n    }\n    excludedExpensesLabel.textContent = `Uscite escluse dalle spese ordinarie: ${money(s.excludedOutflows)}`;",
+"visible excluded expenses summary")
 replace_once(
 "      rows.push([m.id || '', csvDate(m.movement_date), '', m.concept, m.category, m.movement_type, csvNumber(m.amount), csvNumber(signed(m)), csvNumber(balance), monthName, m.notes || '']);",
 "      rows.push([m.id || '', csvDate(m.movement_date), '', m.concept, m.category, m.movement_type, csvNumber(m.amount), csvNumber(signed(m)), csvNumber(balance), monthName, [m.notes || '', isExcludedMovement(m) ? 'ESCLUSO DALLE SPESE ORDINARIE' : ''].filter(Boolean).join(' | ')]);",
