@@ -287,7 +287,7 @@ jobs:
           if "statExcludedExpenses" not in app:
               if excluded_anchor not in app:
                   raise SystemExit("Punto spese ordinarie non trovato: importo escluso non aggiunto")
-              app = app.replace(excluded_anchor, excluded_anchor + "\\n" + excluded_display, 1)
+              app = app.replace(excluded_anchor, excluded_anchor + "\n" + excluded_display, 1)
 
           app_path.write_text(app, encoding="utf-8")
 
