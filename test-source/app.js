@@ -311,8 +311,9 @@
     const totals = new Map(CATEGORIES.map(c => [c, 0]));
     for (const m of rows) {
       if (isExcludedMovement(m)) {
-        const label = 'Movimenti esclusi';
-        totals.set(label, (totals.get(label) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));
+        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));
+      } else if (m.category === SPECIAL_CATEGORY) {
+        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));
       } else if (m.movement_type === 'Uscita') {
         totals.set(m.category, (totals.get(m.category) || 0) + m.amount);
       }
