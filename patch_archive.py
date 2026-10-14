@@ -109,15 +109,39 @@ replace_once(
 """  const CASH_BALANCE_KEY_PREFIX = 'bilancio-casa-cash-balance-v1:';
   function cashBalanceKey() { return CASH_BALANCE_KEY_PREFIX + (currentUser?.id || 'local'); }
   function readCashBalance() {
+    if (cloudCashBalance !== null) return cloudCashBalance;
     try {
       const raw = localStorage.getItem(cashBalanceKey());
-      if (raw === null) {
-        localStorage.setItem(cashBalanceKey(), '50.00');
-        return 50;
-      }
+      if (raw === null) return 50;
       const value = Number(raw);
       return Number.isFinite(value) ? value : 50;
     } catch (_) { return 50; }
+  }
+  async function loadCashBalance() {
+    const key = cashBalanceKey();
+    let localValue = null;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw !== null && Number.isFinite(Number(raw))) localValue = Math.max(0, Number(raw));
+    } catch (_) {}
+    const { data, error } = await db.from('bilancio_cash_settings').select('cash_balance').eq('user_id', currentUser.id).maybeSingle();
+    if (error) {
+      cloudCashBalance = localValue === null ? 50 : localValue;
+      cashCloudAvailable = false;
+      renderCashPanel();
+      return;
+    }
+    cashCloudAvailable = true;
+    if (data) cloudCashBalance = Math.max(0, Number(data.cash_balance) || 0);
+    else {
+      cloudCashBalance = localValue === null ? 50 : localValue;
+      const { error: saveError } = await db.from('bilancio_cash_settings').upsert({
+        user_id: currentUser.id, cash_balance: Math.round(cloudCashBalance * 100) / 100, updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (saveError) cashCloudAvailable = false;
+    }
+    try { localStorage.setItem(key, cloudCashBalance.toFixed(2)); } catch (_) {}
+    renderCashPanel();
   }
   function renderCashPanel() {
     const table = $('monthlyRows')?.closest('table');
@@ -138,9 +162,8 @@ replace_once(
             <div><span class="small-note">Prelievi nel mese selezionato</span><strong id="cashMonthWithdrawals">—</strong></div>
             <div><span class="small-note">Prelievi complessivi registrati</span><strong id="cashTotalWithdrawals">—</strong></div>
           </div>
-          <p class="small-note">Il saldo contanti viene salvato su questo dispositivo e non si sincronizza automaticamente con altri dispositivi.</p>
+          <p id="cashSyncStatus" class="small-note">Caricamento del saldo contanti…</p>
         </section>`);
-      panel = $('cashSummaryPanel');
     }
     const ym = $('periodMonth').value || todayMonth();
     const isCashWithdrawal = m => m.category === 'Prelievo contanti' && m.movement_type === 'Uscita';
@@ -149,26 +172,62 @@ replace_once(
     $('cashBalanceInput').value = readCashBalance().toFixed(2);
     $('cashMonthWithdrawals').textContent = money(monthTotal);
     $('cashTotalWithdrawals').textContent = money(allTotal);
+    const status = $('cashSyncStatus');
+    if (status) status.textContent = cashCloudAvailable
+      ? 'Saldo sincronizzato con il cloud: disponibile sugli altri dispositivi con lo stesso account.'
+      : 'Saldo salvato solo su questo dispositivo. Per la sincronizzazione cloud occorre creare la tabella dedicata.';
   }
-
-  function saveCashBalance() {
+  async function saveCashBalance() {
     const input = $('cashBalanceInput');
     const value = Number(String(input.value).replace(',', '.'));
     if (!Number.isFinite(value) || value < 0) {
       showNotice('Inserisci un saldo contanti valido, pari o superiore a zero.', 'error');
       return;
     }
-    try {
-      localStorage.setItem(cashBalanceKey(), (Math.round(value * 100) / 100).toFixed(2));
-      input.value = (Math.round(value * 100) / 100).toFixed(2);
-      showNotice('Saldo contanti aggiornato su questo dispositivo.');
-    } catch (_) {
-      showNotice('Non riesco a salvare il saldo contanti nel browser.', 'error');
+    const rounded = Math.round(value * 100) / 100;
+    if (!cashCloudAvailable) {
+      try {
+        localStorage.setItem(cashBalanceKey(), rounded.toFixed(2));
+        cloudCashBalance = rounded;
+        input.value = rounded.toFixed(2);
+        showNotice('Saldo contanti salvato su questo dispositivo. La sincronizzazione cloud non è attiva.', 'info');
+        renderCashPanel();
+      } catch (_) { showNotice('Non riesco a salvare il saldo contanti nel browser.', 'error'); }
+      return;
     }
+    const button = $('saveCashBalanceBtn');
+    setButtonBusy(button, true, 'Salvataggio…');
+    try {
+      const { error } = await db.from('bilancio_cash_settings').upsert({
+        user_id: currentUser.id, cash_balance: rounded, updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (error) throw error;
+      cloudCashBalance = rounded;
+      try { localStorage.setItem(cashBalanceKey(), rounded.toFixed(2)); } catch (_) {}
+      input.value = rounded.toFixed(2);
+      renderCashPanel();
+      showNotice('Saldo contanti salvato e sincronizzato.');
+    } catch (error) {
+      showNotice('Errore nel salvataggio cloud del saldo contanti: ' + (error?.message || error), 'error');
+    } finally { setButtonBusy(button, false); }
   }
 
   function renderDashboard() {""",
 "cash balance and withdrawals UI")
+replace_once(
+"  let noticeTimer = null;",
+"  let noticeTimer = null;\n  let cloudCashBalance = null;\n  let cashCloudAvailable = false;",
+"cash sync state")
+replace_once(
+"      await loadSettings();\n      await loadMovements();",
+"      await loadSettings();\n      await loadCashBalance();\n      await loadMovements();",
+"load cash balance after login")
+replace_once(
+"    $('exportBtn').addEventListener('click', exportCsv);",
+"    $('exportBtn').addEventListener('click', exportCsv);\n    document.addEventListener('click', event => { if (event.target.closest('#saveCashBalanceBtn')) saveCashBalance(); });",
+"cash balance save action")
+
+
 replace_once(
 "    $('statTaxReserveCaption').textContent = `Accantonamento per ${s.dayCount} giorni`; ",
 "    $('statTaxReserveCaption').textContent = `Accantonamento per ${s.dayCount} giorni`; \n    renderCashPanel();",
