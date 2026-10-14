@@ -379,3 +379,32 @@ Private Sub SaveSyncSnapshot(ByVal snapWs As Worksheet, ByVal ws As Worksheet, B
     snapWs.Visible = xlSheetVeryHidden
 End Sub
 
+
+Private Function ExcelRowMatchesSnapshot(ByVal ws As Worksheet, ByVal excelRow As Long, ByVal hdr As Object, ByVal vals As Variant) As Boolean
+    On Error GoTo NotMatch
+    If Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd") <> Format$(CDate(vals(1)), "yyyy-mm-dd") Then GoTo NotMatch
+    If CStr(ws.Cells(excelRow, hdr("concetto")).Value) <> CStr(vals(2)) Then GoTo NotMatch
+    If CStr(ws.Cells(excelRow, hdr("categoria")).Value) <> CStr(vals(3)) Then GoTo NotMatch
+    If CStr(ws.Cells(excelRow, hdr("tipo")).Value) <> CStr(vals(4)) Then GoTo NotMatch
+    If Abs(CDbl(ws.Cells(excelRow, hdr("importo")).Value) - CDbl(vals(5))) > 0.005 Then GoTo NotMatch
+    If hdr.Exists("note") Then If CStr(ws.Cells(excelRow, hdr("note")).Value) <> CStr(vals(6)) Then GoTo NotMatch
+    ExcelRowMatchesSnapshot = True
+    Exit Function
+NotMatch:
+    ExcelRowMatchesSnapshot = False
+End Function
+
+Private Function RemoteRowMatchesSnapshot(ByVal remoteWs As Worksheet, ByVal remoteRow As Long, ByVal apiHdr As Object, ByVal vals As Variant) As Boolean
+    On Error GoTo NotMatch
+    If Left$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value), 10) <> Format$(CDate(vals(1)), "yyyy-mm-dd") Then GoTo NotMatch
+    If CStr(remoteWs.Cells(remoteRow, apiHdr("concept")).Value) <> CStr(vals(2)) Then GoTo NotMatch
+    If CStr(remoteWs.Cells(remoteRow, apiHdr("category")).Value) <> CStr(vals(3)) Then GoTo NotMatch
+    If CStr(remoteWs.Cells(remoteRow, apiHdr("movement_type")).Value) <> CStr(vals(4)) Then GoTo NotMatch
+    If Abs(Val(Replace(CStr(remoteWs.Cells(remoteRow, apiHdr("amount")).Value), ",", ".")) - CDbl(vals(5))) > 0.005 Then GoTo NotMatch
+    If CStr(remoteWs.Cells(remoteRow, apiHdr("notes")).Value) <> CStr(vals(6)) Then GoTo NotMatch
+    RemoteRowMatchesSnapshot = True
+    Exit Function
+NotMatch:
+    RemoteRowMatchesSnapshot = False
+End Function
+
