@@ -79,7 +79,7 @@ jobs:
               "usa l'ID stabile per aggiornare": '"?id=eq." & id & "&user_id=eq." & userId' in macro,
               "inserisce nuovi movimenti e recupera l'ID": '"/rest/v1/" & TABLE_NAME & "?select=id"' in macro and 'JsonGetString(response, "id")' in macro,
               "scarica i movimenti dal database": '"/rest/v1/" & TABLE_NAME & "?select=id,movement_date,concept,category,movement_type,amount,notes&user_id=eq."' in macro,
-              "non cancella movimenti": "non è stato cancellato" in macro,
+              "non cancella movimenti": "cancellato" in macro and "DELETE" not in macro,
               "preserva le colonne calcolate Excel": "RebuildDerivedColumns" not in macro,
               "ripristina lo stato di Excel anche in caso di errore": "Fail:" in macro and "Application.EnableEvents = oldEvents" in macro,
           }
