@@ -482,7 +482,39 @@ jobs:
                 month: 'long', year: 'numeric', timeZone: 'UTC'
               }).format(date);
             };
-            const scan = root => {
+            // I browser desktop mostrano spesso input[type=month] come YYYY-MM.
+          // Manteniamo il valore tecnico originale, ma mostriamo una sovrapposizione localizzata.
+          const isDesktop = window.matchMedia('(min-width: 700px) and (pointer: fine)').matches;
+          const monthInputs = new WeakMap();
+          const formatMonthInput = input => {
+            if (!isDesktop || !input || input.tagName !== 'INPUT' || input.type !== 'month') return;
+            let label = monthInputs.get(input);
+            if (!label) {
+              const parent = input.parentElement;
+              if (!parent) return;
+              const wrapper = document.createElement('span');
+              wrapper.style.cssText = 'position:relative;display:inline-flex;vertical-align:middle';
+              parent.insertBefore(wrapper, input);
+              wrapper.appendChild(input);
+              label = document.createElement('span');
+              label.setAttribute('aria-hidden', 'true');
+              label.style.cssText = 'position:absolute;left:8px;top:50%;transform:translateY(-50%);pointer-events:none;white-space:nowrap;overflow:hidden;max-width:calc(100% - 38px);font:inherit;color:inherit';
+              wrapper.appendChild(label);
+              const color = getComputedStyle(input).color;
+              input.style.color = 'transparent';
+              input.style.webkitTextFillColor = 'transparent';
+              input.style.caretColor = 'transparent';
+              label.style.color = color;
+              monthInputs.set(input, label);
+              input.addEventListener('input', () => formatMonthInput(input));
+              input.addEventListener('change', () => formatMonthInput(input));
+            }
+            label.textContent = formatMonth(input.value) || input.value;
+          };
+          const scan = root => {
+            if (!root) return;
+            if (root.matches?.('input[type="month"]')) formatMonthInput(root);
+            root.querySelectorAll?.('input[type="month"]').forEach(formatMonthInput);
               if (!root) return;
               const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
               const nodes = [];
