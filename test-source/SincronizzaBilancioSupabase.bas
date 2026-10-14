@@ -65,7 +65,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
         lastRow = ws.Cells(ws.Rows.Count, idCol).End(xlUp).Row
     End If
 
-    ' Prima invia i record Excel: ID presente = aggiorna quel record; ID vuoto = inserisce e riceve l'ID dal server.
+    ' IMPORTANTE: questa versione NON è ancora sicura per modifiche concorrenti. Non inviare record esistenti prima del confronto remoto.
     For r = headerRow + 1 To lastRow
         If Len(Trim$(CStr(ws.Cells(r, hdr("concetto")).Value))) > 0 And IsDate(ws.Cells(r, hdr("data")).Value) Then
             If Not IsNumeric(ws.Cells(r, hdr("importo")).Value) Or CDbl(ws.Cells(r, hdr("importo")).Value) <= 0 Then
@@ -83,10 +83,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
                 ",""notes"":" & JsonString(IIf(hdr.Exists("note"), CStr(ws.Cells(r, hdr("note")).Value), "")) & "}"
             id = Trim$(CStr(ws.Cells(r, idCol).Value))
             If Len(id) > 0 Then
-                url = SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?id=eq." & id & "&user_id=eq." & userId
-                response = HttpRequest("PATCH", url, body, "application/json", token, httpStatus)
-                If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 707, , "Errore aggiornando la riga " & r & " (HTTP " & httpStatus & "): " & Left$(response, 300)
-                sent = sent + 1
+                ' Rimandato: prima serve confronto con lo snapshot dell'ultima sincronizzazione riuscita.
             Else
                 response = HttpRequest("POST", SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?select=id", body, "application/json", token, httpStatus, "return=representation")
                 If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 708, , "Errore inserendo la riga " & r & " (HTTP " & httpStatus & "): " & Left$(response, 300)
@@ -98,11 +95,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
         End If
     Next r
 
-    ' Scarica tutti i movimenti dell'utente come CSV REST, poi aggiorna/aggiunge per ID.
-    url = SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?select=id,movement_date,concept,category,movement_type,amount,notes&user_id=eq." & userId & "&order=movement_date.asc"
-    response = HttpRequest("GET", url, "", "text/csv", token, httpStatus)
-    If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 710, , "Errore scaricando i movimenti (HTTP " & httpStatus & "): " & Left$(response, 300)
-
+    ' Il CSV remoto è già stato scaricato prima di qualsiasi invio.
     tempPath = Environ$("TEMP") & "\BilancioCasa_api_sync.csv"
     Set stm = CreateObject("ADODB.Stream")
     stm.Type = 2: stm.Charset = "utf-8": stm.Open: stm.WriteText response: stm.SaveToFile tempPath, 2: stm.Close
@@ -159,10 +152,10 @@ Public Sub SincronizzaBilancioCasaDiretto()
     If Len(Dir$(tempPath)) > 0 Then Kill tempPath
     Application.Calculation = oldCalc: Application.EnableEvents = oldEvents: Application.ScreenUpdating = oldScreen
     MsgBox "Sincronizzazione diretta completata." & vbCrLf & _
-        "Movimenti inviati da Excel: " & sent & vbCrLf & "Nuovi ID assegnati: " & added & vbCrLf & _
+        "Nuovi movimenti inviati da Excel: " & sent & vbCrLf & "Nuovi ID assegnati: " & added & vbCrLf & _
         "Movimenti ricevuti dal database: " & downloaded & vbCrLf & _
         "Nessun movimento è stato cancellato." & vbCrLf & _
-        "Nota: per i movimenti già esistenti, in caso di modifiche contemporanee prevale Excel.", vbInformation
+        "Nota: in questa versione gli ID già esistenti vengono aggiornati dal database verso Excel; le modifiche locali su righe con ID esistente non sono ancora inviate. Non usare come sincronizzazione bidirezionale definitiva.", vbInformation
     Exit Sub
 
 Fail:
