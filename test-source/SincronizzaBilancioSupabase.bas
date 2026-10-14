@@ -2,7 +2,7 @@ Attribute VB_Name = "SincronizzaBilancioSupabase"
 Option Explicit
 
 ' Sincronizzazione diretta Excel <-> Supabase per Bilancio Casa.
-' Non usa CSV esportati manualmente. Non cancella mai movimenti.
+' Non usa CSV esportati manualmente. Non cancella mai movimenti. (ramo di test)
 ' In assenza di snapshot, rileva i conflitti e si ferma senza sovrascrivere i dati.
 ' Richiede Excel 2013 e WinHTTP (presente in Windows).
 ' La password viene richiesta ad ogni avvio e non viene salvata nel file.
