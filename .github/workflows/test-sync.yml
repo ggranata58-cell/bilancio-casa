@@ -81,6 +81,7 @@ jobs:
               "scarica i movimenti dal database": '"/rest/v1/" & TABLE_NAME & "?select=id,movement_date,concept,category,movement_type,amount,notes&user_id=eq."' in macro,
               "non cancella movimenti": "cancellato" in macro and "DELETE" not in macro,
               "preserva le colonne calcolate Excel": "RebuildDerivedColumns" not in macro,
+              "converte date ISO senza dipendere dalla lingua di Excel": "IsoDateValue(CStr(tmpWs.Cells(ar, apiHdr(\"movement_date\")).Value))" in macro and "DateSerial(CInt(Left$(s, 4))" in macro,
               "ripristina lo stato di Excel anche in caso di errore": "Fail:" in macro and "Application.EnableEvents = oldEvents" in macro,
           }
           for label, ok in checks.items():
