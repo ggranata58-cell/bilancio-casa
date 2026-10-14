@@ -275,6 +275,20 @@ jobs:
               app = app.replace(init_marker, backup_patch + "\n" + init_marker, 1)
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
+          excluded_anchor = "    $('statExpenses').textContent = money(s.expenses);"
+          excluded_display = """
+              const excludedSummary = $('statExcludedExpenses') || document.createElement('p');
+              excludedSummary.id = 'statExcludedExpenses';
+              excludedSummary.className = 'small-note';
+              excludedSummary.style.cssText = 'margin:6px 0 0;font-size:.9em;line-height:1.35';
+              excludedSummary.textContent = 'Uscite escluse dal budget: ' + money(s.excludedOutflows);
+              if (!excludedSummary.isConnected) $('statExpenses').insertAdjacentElement('afterend', excludedSummary);
+          """
+          if "statExcludedExpenses" not in app:
+              if excluded_anchor not in app:
+                  raise SystemExit("Punto spese ordinarie non trovato: importo escluso non aggiunto")
+              app = app.replace(excluded_anchor, excluded_anchor + "\\n" + excluded_display, 1)
+
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
