@@ -149,7 +149,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
                     remoteChanged = Not RemoteRowMatchesSnapshot(tmpWs, ar, apiHdr, snapVals)
                     If excelChanged And remoteChanged Then
                         If Not ExcelRowMatchesRemote(ws, r, hdr, tmpWs, ar, apiHdr) Then
-                            Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Excel e app sono stati modificati in modo diverso dopo l'ultima sincronizzazione. Nessuna versione è stata sovrascritta."
+                            Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Excel e app sono stati modificati in modo diverso dopo l'ultima sincronizzazione. Nessuna delle due versioni è stata sovrascritta."
                         End If
                     ElseIf excelChanged And Not remoteChanged Then
                         If Not PatchMovementFromExcel(ws, r, hdr, id, userId, token, httpStatus, response) Then
