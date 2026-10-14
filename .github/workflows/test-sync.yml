@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify-excel-sync:
@@ -59,6 +59,20 @@ jobs:
           if failed:
               raise SystemExit("Verifica fallita: " + "; ".join(failed))
           PY
+
+      - name: Espone il sorgente estratto nel solo branch di prova per analisi
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-source
+          cp extracted/bilancio-casa-pwa/app.js test-source/app.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test-source/app.js
+          if ! git diff --cached --quiet; then
+            git commit -m "Expose extracted app source for sync analysis"
+            git push
+          fi
 
       - name: Conserva il pacchetto verificato come artefatto di prova
         uses: actions/upload-artifact@v7.0.2
