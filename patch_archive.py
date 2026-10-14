@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Apply the bidirectional Excel-ID improvement to the packaged PWA archive."""
 import os
+import re
 import sys
 import tempfile
 import zipfile
@@ -60,7 +61,10 @@ if "withStableId" not in app:
           if (error) throw error;
         }
     """
-    replace_once(old_batch, new_batch, "separate stable-ID and legacy import batches")
+    batch_pattern = r"    let insertedBatches = 0;.*?\n        }"
+    app, batch_count = re.subn(batch_pattern, new_batch.rstrip(), app, count=1, flags=re.S)
+    if batch_count != 1:
+        raise SystemExit(f"Expected one legacy import batch block, found {batch_count}")
     replace_once(
     "L'importazione non modifica né cancella movimenti già registrati. Continuare?",
     "Le righe con ID movimento vengono aggiornate senza creare doppioni; le righe senza ID vengono aggiunte senza cancellare movimenti esistenti. Continuare?",
