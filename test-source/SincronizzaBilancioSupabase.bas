@@ -3,6 +3,7 @@ Option Explicit
 
 ' Sincronizzazione diretta Excel <-> Supabase per Bilancio Casa.
 ' Non usa CSV esportati manualmente. Non cancella mai movimenti.
+' In assenza di snapshot, rileva i conflitti e si ferma senza sovrascrivere i dati.
 ' Richiede Excel 2013 e WinHTTP (presente in Windows).
 ' La password viene richiesta ad ogni avvio e non viene salvata nel file.
 
@@ -12,7 +13,7 @@ Private Const TABLE_NAME As String = "bilancio_movements"
 
 Public Sub SincronizzaBilancioCasaDiretto()
     Dim email As String, password As String, token As String, userId As String
-    Dim ws As Worksheet, hdr As Object, rowById As Object, apiRows As Object
+    Dim ws As Worksheet, hdr As Object, rowById As Object, apiRows As Object, newIds As Object
     Dim headerRow As Long, lastRow As Long, idCol As Long, c As Long, r As Long
     Dim id As String, body As String, url As String, response As String
     Dim sent As Long, added As Long, downloaded As Long, updated As Long
@@ -24,6 +25,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
 
     On Error GoTo Fail
     Set ws = ThisWorkbook.Worksheets("Movimenti")
+    Set newIds = CreateObject("Scripting.Dictionary"): newIds.CompareMode = vbTextCompare
     email = InputBox("Inserisci l'email usata per accedere a Bilancio Casa:", "Sincronizzazione diretta")
     If Len(Trim$(email)) = 0 Then Exit Sub
     password = InputBox("Inserisci la password di Bilancio Casa. Non verrà salvata.", "Sincronizzazione diretta")
@@ -94,6 +96,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
                 id = JsonGetString(response, "id")
                 If Len(id) = 0 Then Err.Raise vbObjectError + 709, , "Il server non ha restituito l'ID del nuovo movimento alla riga " & r
                 ws.Cells(r, idCol).Value = id
+                newIds(id) = True
                 sent = sent + 1: added = added + 1
             End If
         End If
@@ -115,6 +118,12 @@ Public Sub SincronizzaBilancioCasaDiretto()
     If Not apiHdr.Exists("id") Then Err.Raise vbObjectError + 711, , "La risposta del database non contiene la colonna ID."
     apiIdCol = apiHdr("id"): apiLast = tmpWs.Cells(tmpWs.Rows.Count, apiIdCol).End(xlUp).Row
 
+    ' Indicizza i record remoti prima di modificare il foglio Excel.
+    For ar = 2 To apiLast
+        id = Trim$(CStr(tmpWs.Cells(ar, apiIdCol).Value))
+        If Len(id) > 0 Then apiRows(id) = ar
+    Next ar
+
     Set rowById = CreateObject("Scripting.Dictionary"): rowById.CompareMode = vbTextCompare
     If Not targetTable Is Nothing Then
         If Not targetTable.DataBodyRange Is Nothing Then
@@ -127,6 +136,22 @@ Public Sub SincronizzaBilancioCasaDiretto()
             id = Trim$(CStr(ws.Cells(r, idCol).Value)): If Len(id) > 0 Then If Not rowById.Exists(id) Then rowById.Add id, r
         Next r
     End If
+
+    ' Protezione anti-perdita: senza snapshot non si può decidere quale copia sia più recente.
+    ' Se Excel e database differiscono su un ID già esistente, interrompe PRIMA di sovrascrivere Excel.
+    For Each k In rowById.Keys
+        id = CStr(k)
+        If apiRows.Exists(id) Then
+            If Not newIds.Exists(id) Then
+                r = CLng(rowById(id)): ar = CLng(apiRows(id))
+                If Not ExcelRowMatchesRemote(ws, r, hdr, tmpWs, ar, apiHdr) Then
+                    Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Excel e app contengono dati diversi. Nessuna delle due versioni è stata sovrascritta; serve il confronto con lo snapshot."
+                End If
+            End If
+        ElseIf Not newIds.Exists(id) Then
+            Err.Raise vbObjectError + 713, , "L'ID " & id & " presente in Excel non risulta nel database. Sincronizzazione interrotta per evitare perdita di dati."
+        End If
+    Next k
 
     For ar = 2 To apiLast
         id = Trim$(CStr(tmpWs.Cells(ar, apiIdCol).Value))
@@ -159,7 +184,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
         "Nuovi movimenti inviati da Excel: " & sent & vbCrLf & "Nuovi ID assegnati: " & added & vbCrLf & _
         "Movimenti ricevuti dal database: " & downloaded & vbCrLf & _
         "Nessun movimento è stato cancellato." & vbCrLf & _
-        "Nota: in questa versione gli ID già esistenti vengono aggiornati dal database verso Excel; le modifiche locali su righe con ID esistente non sono ancora inviate. Non usare come sincronizzazione bidirezionale definitiva.", vbInformation
+        "Nota: le modifiche su ID esistenti non vengono ancora propagate. Se Excel e app differiscono, la macro si ferma per proteggere entrambe le versioni.", vbInformation
     Exit Sub
 
 Fail:
@@ -252,6 +277,23 @@ End Function
 Private Sub PutValue(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal hdr As Object, ByVal key As String, ByVal value As Variant)
     If hdr.Exists(key) Then ws.Cells(rowNum, hdr(key)).Value = value
 End Sub
+
+Private Function ExcelRowMatchesRemote(ByVal ws As Worksheet, ByVal excelRow As Long, ByVal hdr As Object, _
+    ByVal remoteWs As Worksheet, ByVal remoteRow As Long, ByVal apiHdr As Object) As Boolean
+    On Error GoTo NotMatch
+    If Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd") <> Left$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value), 10) Then GoTo NotMatch
+    If CStr(ws.Cells(excelRow, hdr("concetto")).Value) <> CStr(remoteWs.Cells(remoteRow, apiHdr("concept")).Value) Then GoTo NotMatch
+    If CStr(ws.Cells(excelRow, hdr("categoria")).Value) <> CStr(remoteWs.Cells(remoteRow, apiHdr("category")).Value) Then GoTo NotMatch
+    If CStr(ws.Cells(excelRow, hdr("tipo")).Value) <> CStr(remoteWs.Cells(remoteRow, apiHdr("movement_type")).Value) Then GoTo NotMatch
+    If Abs(CDbl(ws.Cells(excelRow, hdr("importo")).Value) - Val(Replace(CStr(remoteWs.Cells(remoteRow, apiHdr("amount")).Value), ",", "."))) > 0.005 Then GoTo NotMatch
+    If hdr.Exists("note") Then
+        If CStr(ws.Cells(excelRow, hdr("note")).Value) <> CStr(remoteWs.Cells(remoteRow, apiHdr("notes")).Value) Then GoTo NotMatch
+    End If
+    ExcelRowMatchesRemote = True
+    Exit Function
+NotMatch:
+    ExcelRowMatchesRemote = False
+End Function
 
 Private Function IsoDateValue(ByVal s As String) As Variant
     s = Trim$(s)
