@@ -307,3 +307,24 @@ Private Function IsoDateValue(ByVal s As String) As Variant
     End If
 End Function
 
+
+Private Function GetOrCreateSyncSheet(ByVal wb As Workbook) As Worksheet
+    On Error Resume Next
+    Set GetOrCreateSyncSheet = wb.Worksheets("_SyncBilancio")
+    On Error GoTo 0
+    If GetOrCreateSyncSheet Is Nothing Then
+        Set GetOrCreateSyncSheet = wb.Worksheets.Add(After:=wb.Worksheets(wb.Worksheets.Count))
+        GetOrCreateSyncSheet.Name = "_SyncBilancio"
+        With GetOrCreateSyncSheet
+            .Cells(1, 1).Value = "id"
+            .Cells(1, 2).Value = "data"
+            .Cells(1, 3).Value = "concetto"
+            .Cells(1, 4).Value = "categoria"
+            .Cells(1, 5).Value = "tipo"
+            .Cells(1, 6).Value = "importo"
+            .Cells(1, 7).Value = "note"
+            .Visible = xlSheetVeryHidden
+        End With
+    End If
+End Function
+
