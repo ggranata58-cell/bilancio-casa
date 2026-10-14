@@ -10,6 +10,7 @@ on:
       - 'patch_archive.py'
       - '.github/workflows/test-sync.yml'
       - 'test-source/AggiornaMovimentiDaApp.bas'
+      - 'test-source/SincronizzaBilancioSupabase.bas'
   workflow_dispatch:
 
 permissions:
@@ -61,6 +62,32 @@ jobs:
           failed = [label for label, ok in checks.items() if not ok]
           if failed:
               raise SystemExit("Verifica fallita: " + "; ".join(failed))
+          PY
+
+      - name: Verifica macro Excel per sincronizzazione diretta Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          MACRO="test-source/SincronizzaBilancioSupabase.bas"
+          test -f "$MACRO"
+          python3 - <<'PY'
+          from pathlib import Path
+          macro = Path("test-source/SincronizzaBilancioSupabase.bas").read_text(encoding="utf-8")
+          checks = {
+              "usa il progetto Supabase corretto": "bstcydrgyspgofckzybl.supabase.co" in macro,
+              "autenticazione password senza salvare la password": "/auth/v1/token?grant_type=password" in macro and "password = vbNullString" in macro,
+              "usa l'ID stabile per aggiornare": '"?id=eq." & id & "&user_id=eq." & userId' in macro,
+              "inserisce nuovi movimenti e recupera l'ID": '"/rest/v1/" & TABLE_NAME & "?select=id"' in macro and 'JsonGetString(response, "id")' in macro,
+              "scarica i movimenti dal database": '"/rest/v1/" & TABLE_NAME & "?select=id,movement_date,concept,category,movement_type,amount,notes&user_id=eq."' in macro,
+              "non cancella movimenti": "non è stato cancellato" in macro,
+              "preserva le colonne calcolate Excel": "RebuildDerivedColumns" not in macro,
+              "ripristina lo stato di Excel anche in caso di errore": "Fail:" in macro and "Application.EnableEvents = oldEvents" in macro,
+          }
+          for label, ok in checks.items():
+              print(("OK" if ok else "ERRORE") + " - " + label)
+          failed = [label for label, ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit("Verifica macro diretta fallita: " + "; ".join(failed))
           PY
 
       - name: Verifica macro Excel per sincronizzazione inversa
