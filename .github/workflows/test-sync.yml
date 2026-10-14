@@ -32,7 +32,7 @@ jobs:
           python3 patch_archive.py Bilancio_Casa_PWA_v0_2_0.zip
           unzip -tq Bilancio_Casa_PWA_v0_2_0.zip
 
-      - name: Verifica le funzioni di sincronizzazione senza pubblicare
+      - name: Verifica importazione ed esportazione con ID stabili
         shell: bash
         run: |
           set -euo pipefail
@@ -43,15 +43,17 @@ jobs:
           node --check "$APP"
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("extracted/bilancio-casa-pwa/app.js")
-          app = p.read_text(encoding="utf-8")
+          app = Path("extracted/bilancio-casa-pwa/app.js").read_text(encoding="utf-8")
           checks = {
-              "intestazione ID movimento nell'esportazione": "'ID movimento'" in app,
-              "rilevamento della colonna ID in importazione": "movementuuid" in app and "indexes.id" in app,
-              "importazione con ID stabile": "withStableId" in app and "upsert(part, { onConflict: 'id' })" in app,
-              "export dell'ID reale del movimento": "m.id || ''" in app,
-              "saldo iniziale escluso dall'ID": "'', csvDate(settings.opening_date)" in app,
-              "conservazione import_key per righe con ID": "hasStableId ? {} : { import_key:" in app,
+              "export CSV include tutte le colonne": "['ID movimento', 'Data', 'Giorno', 'Concetto', 'Categoria', 'Tipo', 'Importo', 'Importo +/-', 'Saldo', 'Mese', 'Note']" in app,
+              "export CSV usa l'ID reale del movimento": "m.id || ''" in app,
+              "export CSV calcola importo firmato": "signed(m)" in app,
+              "import Excel riconosce ID movimento": "'idmovimento'" in app and "id: find(" in app,
+              "import Excel legge le colonne del foglio": all(x in app for x in ["'concetto'", "'categoria'", "'tipo'", "'importo'", "'note'"]),
+              "import Excel deduce entrata o uscita dal segno": "signedAmount >= 0 ? 'Entrata' : 'Uscita'" in app,
+              "ID stabile aggiorna il record senza duplicarlo": "upsert(part, { onConflict: 'id' })" in app,
+              "righe senza ID mantengono la deduplicazione": "onConflict: 'user_id,import_key', ignoreDuplicates: true" in app,
+              "ID stabile non riceve un import_key artificiale": "...(hasStableId ? { id: suppliedId } : { import_key:" in app and "id: suppliedId, import_key: `excel-id:${suppliedId}`" not in app,
           }
           for label, ok in checks.items():
               print(("OK" if ok else "ERRORE") + " - " + label)
