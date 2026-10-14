@@ -103,6 +103,81 @@ else:
     if "upsert(part, { onConflict: 'id' })" not in app:
         raise SystemExit("Stable-ID upsert behavior is missing.")
 
+
+replace_once(
+"  function renderDashboard() {",
+"""  const CASH_BALANCE_KEY_PREFIX = 'bilancio-casa-cash-balance-v1:';
+  function cashBalanceKey() { return CASH_BALANCE_KEY_PREFIX + (currentUser?.id || 'local'); }
+  function readCashBalance() {
+    try {
+      const raw = localStorage.getItem(cashBalanceKey());
+      if (raw === null) {
+        localStorage.setItem(cashBalanceKey(), '50.00');
+        return 50;
+      }
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : 50;
+    } catch (_) { return 50; }
+  }
+  function renderCashPanel() {
+    const table = $('monthlyRows')?.closest('table');
+    if (!table) return;
+    let panel = $('cashSummaryPanel');
+    if (!panel) {
+      table.insertAdjacentHTML('afterend', `
+        <section id="cashSummaryPanel" class="settings-card" style="margin-top:1rem">
+          <h3>Contanti e prelievi</h3>
+          <p class="small-note">I prelievi restano nel saldo bancario, ma non sono conteggiati come spese ordinarie. Non registrare qui i singoli acquisti in contanti.</p>
+          <div class="form-grid">
+            <label for="cashBalanceInput">Saldo residuo contanti (€)
+              <input id="cashBalanceInput" type="number" inputmode="decimal" min="0" step="0.01" />
+            </label>
+            <div class="form-actions"><button id="saveCashBalanceBtn" type="button">Salva saldo contanti</button></div>
+          </div>
+          <div class="summary-grid" style="margin-top:.75rem">
+            <div><span class="small-note">Prelievi nel mese selezionato</span><strong id="cashMonthWithdrawals">—</strong></div>
+            <div><span class="small-note">Prelievi complessivi registrati</span><strong id="cashTotalWithdrawals">—</strong></div>
+          </div>
+          <p class="small-note">Il saldo contanti viene salvato su questo dispositivo e non si sincronizza automaticamente con altri dispositivi.</p>
+        </section>`);
+      panel = $('cashSummaryPanel');
+    }
+    const ym = $('periodMonth').value || todayMonth();
+    const isCashWithdrawal = m => m.category === 'Prelievo contanti' && m.movement_type === 'Uscita';
+    const monthTotal = monthMovements(ym).filter(isCashWithdrawal).reduce((sum, m) => sum + Number(m.amount || 0), 0);
+    const allTotal = movements.filter(m => inAccountingPeriod(m) && isCashWithdrawal(m)).reduce((sum, m) => sum + Number(m.amount || 0), 0);
+    $('cashBalanceInput').value = readCashBalance().toFixed(2);
+    $('cashMonthWithdrawals').textContent = money(monthTotal);
+    $('cashTotalWithdrawals').textContent = money(allTotal);
+  }
+
+  function saveCashBalance() {
+    const input = $('cashBalanceInput');
+    const value = Number(String(input.value).replace(',', '.'));
+    if (!Number.isFinite(value) || value < 0) {
+      showNotice('Inserisci un saldo contanti valido, pari o superiore a zero.', 'error');
+      return;
+    }
+    try {
+      localStorage.setItem(cashBalanceKey(), (Math.round(value * 100) / 100).toFixed(2));
+      input.value = (Math.round(value * 100) / 100).toFixed(2);
+      showNotice('Saldo contanti aggiornato su questo dispositivo.');
+    } catch (_) {
+      showNotice('Non riesco a salvare il saldo contanti nel browser.', 'error');
+    }
+  }
+
+  function renderDashboard() {""",
+"cash balance and withdrawals UI")
+replace_once(
+"    $('statTaxReserveCaption').textContent = `Accantonamento per ${s.dayCount} giorni`; ",
+"    $('statTaxReserveCaption').textContent = `Accantonamento per ${s.dayCount} giorni`; \n    renderCashPanel();",
+"render cash summary")
+replace_once(
+"    $('exportBtn').addEventListener('click', exportCsv);",
+"    $('exportBtn').addEventListener('click', exportCsv);\n    document.addEventListener('click', event => { if (event.target.closest('#saveCashBalanceBtn')) saveCashBalance(); });",
+"cash balance save action")
+
 replace_once(
 "    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro'\n  ];\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';",
 "    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro',\n    'Movimenti esclusi', 'Prelievo contanti'\n  ];\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';\n  const EXCLUDED_CATEGORIES = new Set(['Movimenti esclusi', 'Prelievo contanti']);\n  function isExcludedMovement(m) { return EXCLUDED_CATEGORIES.has(m.category); }",
@@ -142,6 +217,9 @@ try:
         patched = check.read(target).decode("utf-8")
         if "withStableId" not in patched or "ID movimento" not in patched:
             raise SystemExit("Patch verification failed.")
+        for required in ["function renderCashPanel()", "cashBalanceInput", "cashMonthWithdrawals", "cashTotalWithdrawals", "localStorage.setItem(cashBalanceKey()", "renderCashPanel();"]:
+            if required not in patched:
+                raise SystemExit(f"Cash summary patch verification failed: {required}")
     os.replace(temp_path, archive)
 finally:
     if os.path.exists(temp_path):
