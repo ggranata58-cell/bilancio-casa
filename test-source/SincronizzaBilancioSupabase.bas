@@ -157,7 +157,6 @@ Public Sub SincronizzaBilancioCasaDiretto()
 
     tmpWb.Close SaveChanges:=False
     If Len(Dir$(tempPath)) > 0 Then Kill tempPath
-    RebuildDerivedColumns ws, hdr, headerRow
     Application.Calculation = oldCalc: Application.EnableEvents = oldEvents: Application.ScreenUpdating = oldScreen
     MsgBox "Sincronizzazione diretta completata." & vbCrLf & _
         "Movimenti inviati da Excel: " & sent & vbCrLf & "Nuovi ID assegnati: " & added & vbCrLf & _
@@ -257,23 +256,3 @@ Private Sub PutValue(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal hdr As O
     If hdr.Exists(key) Then ws.Cells(rowNum, hdr(key)).Value = value
 End Sub
 
-Private Sub RebuildDerivedColumns(ByVal ws As Worksheet, ByVal hdr As Object, ByVal headerRow As Long)
-    Dim lastRow As Long, r As Long, idCol As Long, dateCol As Long, typeCol As Long, amountCol As Long
-    Dim signedCol As Long, balanceCol As Long, monthCol As Long, dayCol As Long, bal As Double, d As Date, typ As String, amt As Double
-    idCol = hdr("idmovimento"): dateCol = hdr("data"): typeCol = hdr("tipo"): amountCol = hdr("importo")
-    lastRow = ws.Cells(ws.Rows.Count, dateCol).End(xlUp).Row
-    If lastRow <= headerRow Then Exit Sub
-    If hdr.Exists("saldo") Then
-        bal = 0
-        For r = headerRow + 1 To lastRow
-            If IsDate(ws.Cells(r, dateCol).Value) And IsNumeric(ws.Cells(r, amountCol).Value) Then
-                d = CDate(ws.Cells(r, dateCol).Value): typ = CStr(ws.Cells(r, typeCol).Value): amt = CDbl(ws.Cells(r, amountCol).Value)
-                If typ = "Entrata" Then bal = bal + amt Else bal = bal - amt
-                If hdr.Exists("importopiu") Then ws.Cells(r, hdr("importopiu")).Value = IIf(typ = "Entrata", amt, -amt)
-                ws.Cells(r, hdr("saldo")).Value = bal
-                If hdr.Exists("giorno") Then ws.Cells(r, hdr("giorno")).Value = Format$(d, "dddd")
-                If hdr.Exists("mese") Then ws.Cells(r, hdr("mese")).Value = Format$(d, "mmmm yyyy")
-            End If
-        Next r
-    End If
-End Sub
