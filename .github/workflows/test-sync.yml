@@ -65,6 +65,7 @@ jobs:
               "saldo contanti iniziale di 50 euro e cache locale": "cashBalanceKey()" in app and "localValue === null ? 50 : localValue" in app and "localStorage.setItem(key, cloudCashBalance.toFixed(2))" in app,
               "saldo contanti modificabile con controllo importo": "function saveCashBalance()" in app and "value < 0" in app,
               "solo le categorie esplicitamente escluse escono dalle spese ordinarie": "new Set(['Movimenti esclusi', 'Prelievo contanti'])" in app and "movement_type === 'Uscita' && !isExcludedMovement(m)" in app,
+              "importo escluso mostrato separatamente e in modo visibile": "id=\"statExcludedExpenses\"" in app and "Uscite escluse dalle spese ordinarie:" in app and "s.excludedOutflows" in app,
               "Tasas y Intereses conserva il trattamento speciale": "const SPECIAL_CATEGORY = 'Tasas y Intereses';" in app and "else if (m.category === SPECIAL_CATEGORY)" in app,
               "saldo contanti con lettura e scrittura cloud": "db.from('bilancio_cash_settings')" in app and "await loadCashBalance()" in app and "Saldo contanti salvato e sincronizzato" in app,
               "fallback locale esplicito se manca la tabella cloud": "La sincronizzazione cloud non è attiva." in app,
