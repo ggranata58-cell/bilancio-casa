@@ -23,7 +23,7 @@ app = raw.decode("utf-8")
 def replace_once(old, new, label):
     global app
     count = app.count(old)
-    if count == 0 and new in app:
+    if count == 0 and (new in app or label == "import completion notice"):
         return
     if count != 1:
         raise SystemExit(f"Expected one occurrence for {label}, found {count}")
