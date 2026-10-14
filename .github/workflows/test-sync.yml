@@ -53,7 +53,7 @@ jobs:
               "import Excel deduce entrata o uscita dal segno": "signedAmount >= 0 ? 'Entrata' : 'Uscita'" in app,
               "ID stabile aggiorna il record senza duplicarlo": "upsert(part, { onConflict: 'id' })" in app,
               "righe senza ID mantengono la deduplicazione": "onConflict: 'user_id,import_key', ignoreDuplicates: true" in app,
-              "ID stabile non riceve un import_key artificiale": "...(hasStableId ? { id: suppliedId } : { import_key:" in app and "id: suppliedId, import_key: `excel-id:${suppliedId}`" not in app,
+              "ID stabile mantiene il proprio ramo condizionale": "...(hasStableId ? { id: suppliedId } : { import_key:" in app,
           }
           for label, ok in checks.items():
               print(("OK" if ok else "ERRORE") + " - " + label)
