@@ -6,9 +6,12 @@
     'Antifurto', 'Assicurazione', 'Sanitarie', 'Veterinarie', 'Super e alim.',
     'Varie auto e moto', 'Rete e Tel.', 'Energia elettrica', 'Acqua - Facsa',
     'Amazon Prime + Temu', 'Varie', 'Divertimento', 'Tasas y Intereses',
-    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro'
+    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro',
+    'Movimenti esclusi', 'Prelievo contanti'
   ];
   const SPECIAL_CATEGORY = 'Tasas y Intereses';
+  const EXCLUDED_CATEGORIES = new Set(['Movimenti esclusi', 'Prelievo contanti', 'Imposte e tasse', SPECIAL_CATEGORY]);
+  function isExcludedMovement(m) { return EXCLUDED_CATEGORIES.has(m.category); }
   const DEFAULTS = { opening_date: '2026-09-01', opening_balance: 17727.21, daily_budget: 81.71, tax_reserve_daily: 19.50 };
   const $ = id => document.getElementById(id);
   const euro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
@@ -280,7 +283,8 @@
   function monthlyStats(ym) {
     const rows = monthMovements(ym);
     const income = rows.filter(m => m.movement_type === 'Entrata').reduce((s, m) => s + m.amount, 0);
-    const expenses = rows.filter(m => m.movement_type === 'Uscita').reduce((s, m) => s + m.amount, 0);
+    const expenses = rows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);
+    const excludedOutflows = rows.filter(m => m.movement_type === 'Uscita' && isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);
     const [y, mo] = ym.split('-').map(Number);
     const now = new Date();
     let dayCount = monthEndDate(ym);
@@ -300,14 +304,15 @@
     const cutoff = dayCount === 0 ? '0000-00-00' : finalDate;
     const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);
     const closing = monthOpen + monthSigned;
-    return { ym, rows, income, expenses, budgetAllocated, taxReserve, budgetRemainder, monthOpen, closing, dayCount };
+    return { ym, rows, income, expenses, excludedOutflows, budgetAllocated, taxReserve, budgetRemainder, monthOpen, closing, dayCount };
   }
 
   function categoryStatsForRows(rows) {
     const totals = new Map(CATEGORIES.map(c => [c, 0]));
     for (const m of rows) {
-      if (m.category === SPECIAL_CATEGORY) {
-        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));
+      if (isExcludedMovement(m)) {
+        const label = 'Movimenti esclusi';
+        totals.set(label, (totals.get(label) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));
       } else if (m.movement_type === 'Uscita') {
         totals.set(m.category, (totals.get(m.category) || 0) + m.amount);
       }
@@ -321,6 +326,7 @@
     $('statBalance').textContent = money(balanceAt(isoToday()));
     $('statIncome').textContent = money(s.income);
     $('statExpenses').textContent = money(s.expenses);
+    $('statExpenses').title = `Spese ordinarie: ${money(s.expenses)}. Uscite escluse dal budget: ${money(s.excludedOutflows)}.`;
     $('statSavings').textContent = money(s.budgetRemainder);
     $('statSavings').classList.toggle('amount-out', s.budgetRemainder < 0);
     $('statSavingsCaption').textContent = `${money(s.budgetAllocated)} di quote giornaliere − uscite`;
@@ -733,7 +739,7 @@
     for (const m of all) {
       balance += signed(m);
       const monthName = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date(`${m.movement_date}T12:00:00`));
-      rows.push([m.id || '', csvDate(m.movement_date), '', m.concept, m.category, m.movement_type, csvNumber(m.amount), csvNumber(signed(m)), csvNumber(balance), monthName, m.notes || '']);
+      rows.push([m.id || '', csvDate(m.movement_date), '', m.concept, m.category, m.movement_type, csvNumber(m.amount), csvNumber(signed(m)), csvNumber(balance), monthName, [m.notes || '', isExcludedMovement(m) ? 'ESCLUSO DALLE SPESE ORDINARIE' : ''].filter(Boolean).join(' | ')]);
     }
     const content = '\ufeff' + rows.map(row => row.map(csvCell).join(';')).join('\r\n');
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
