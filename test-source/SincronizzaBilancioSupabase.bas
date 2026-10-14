@@ -385,7 +385,7 @@ Private Function DescribeRowDifferences(ByVal ws As Worksheet, ByVal excelRow As
     If Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd") <> Left$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value), 10) Then result = result & "Data; "
     If Trim$(CStr(ws.Cells(excelRow, hdr("concetto")).Value)) <> Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("concept")).Value)) Then result = result & "Concetto; "
     If Trim$(CStr(ws.Cells(excelRow, hdr("categoria")).Value)) <> Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("category")).Value)) Then result = result & "Categoria; "
-    If LCase$(Trim$(CStr(ws.Cells(excelRow, hdr("tipo")).Value))) <> LCase$(Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_type")).Value)) Then result = result & "Tipo; "
+    If LCase$(Trim$(CStr(ws.Cells(excelRow, hdr("tipo")).Value))) <> LCase$(Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_type")).Value))) Then result = result & "Tipo; "
     If Abs(CDbl(ws.Cells(excelRow, hdr("importo")).Value) - Val(Replace(CStr(remoteWs.Cells(remoteRow, apiHdr("amount")).Value), ",", "."))) > 0.005 Then result = result & "Importo; "
     If hdr.Exists("note") Then
         If Trim$(CStr(ws.Cells(excelRow, hdr("note")).Value)) <> Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("notes")).Value)) Then result = result & "Note; "
