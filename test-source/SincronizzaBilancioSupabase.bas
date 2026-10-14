@@ -361,10 +361,21 @@ Private Function OptionalCellText(ByVal ws As Worksheet, ByVal rowNum As Long, B
     End If
 End Function
 
+Private Function RemoteDateISO(ByVal v As Variant) As String
+    ' OpenText può convertire la data ISO del CSV in una data Excel locale.
+    ' Normalizza entrambe le rappresentazioni nello stesso formato ISO.
+    If IsDate(v) Then
+        RemoteDateISO = Format$(CDate(v), "yyyy-mm-dd")
+    Else
+        RemoteDateISO = Left$(Trim$(CStr(v)), 10)
+    End If
+End Function
+
+
 Private Function ExcelRowMatchesRemote(ByVal ws As Worksheet, ByVal excelRow As Long, ByVal hdr As Object, _
     ByVal remoteWs As Worksheet, ByVal remoteRow As Long, ByVal apiHdr As Object) As Boolean
     On Error GoTo NotMatch
-    If Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd") <> Left$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value), 10) Then GoTo NotMatch
+    If Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd") <> RemoteDateISO(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value) Then GoTo NotMatch
     If CStr(ws.Cells(excelRow, hdr("concetto")).Value) <> CStr(remoteWs.Cells(remoteRow, apiHdr("concept")).Value) Then GoTo NotMatch
     If CStr(ws.Cells(excelRow, hdr("categoria")).Value) <> CStr(remoteWs.Cells(remoteRow, apiHdr("category")).Value) Then GoTo NotMatch
     If CStr(ws.Cells(excelRow, hdr("tipo")).Value) <> CStr(remoteWs.Cells(remoteRow, apiHdr("movement_type")).Value) Then GoTo NotMatch
@@ -383,7 +394,7 @@ Private Function DescribeRowDifferences(ByVal ws As Worksheet, ByVal excelRow As
     ByVal remoteWs As Worksheet, ByVal remoteRow As Long, ByVal apiHdr As Object) As String
     Dim result As String
     On Error GoTo SafeExit
-    If Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd") <> Left$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value), 10) Then result = result & "Data; "
+    If Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd") <> RemoteDateISO(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value) Then result = result & "Data; "
     If Trim$(CStr(ws.Cells(excelRow, hdr("concetto")).Value)) <> Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("concept")).Value)) Then result = result & "Concetto; "
     If Trim$(CStr(ws.Cells(excelRow, hdr("categoria")).Value)) <> Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("category")).Value)) Then result = result & "Categoria; "
     If LCase$(Trim$(CStr(ws.Cells(excelRow, hdr("tipo")).Value))) <> LCase$(Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_type")).Value))) Then result = result & "Tipo; "
@@ -496,7 +507,7 @@ End Function
 
 Private Function RemoteRowMatchesSnapshot(ByVal remoteWs As Worksheet, ByVal remoteRow As Long, ByVal apiHdr As Object, ByVal vals As Variant) As Boolean
     On Error GoTo NotMatch
-    If Left$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value), 10) <> Format$(CDate(vals(1)), "yyyy-mm-dd") Then GoTo NotMatch
+    If RemoteDateISO(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value) <> Format$(CDate(vals(1)), "yyyy-mm-dd") Then GoTo NotMatch
     If CStr(remoteWs.Cells(remoteRow, apiHdr("concept")).Value) <> CStr(vals(2)) Then GoTo NotMatch
     If CStr(remoteWs.Cells(remoteRow, apiHdr("category")).Value) <> CStr(vals(3)) Then GoTo NotMatch
     If CStr(remoteWs.Cells(remoteRow, apiHdr("movement_type")).Value) <> CStr(vals(4)) Then GoTo NotMatch
