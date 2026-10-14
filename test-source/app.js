@@ -10,7 +10,7 @@
     'Movimenti esclusi', 'Prelievo contanti'
   ];
   const SPECIAL_CATEGORY = 'Tasas y Intereses';
-  const EXCLUDED_CATEGORIES = new Set(['Movimenti esclusi', 'Prelievo contanti', 'Imposte e tasse', SPECIAL_CATEGORY]);
+  const EXCLUDED_CATEGORIES = new Set(['Movimenti esclusi', 'Prelievo contanti']);
   function isExcludedMovement(m) { return EXCLUDED_CATEGORIES.has(m.category); }
   const DEFAULTS = { opening_date: '2026-09-01', opening_balance: 17727.21, daily_budget: 81.71, tax_reserve_daily: 19.50 };
   const $ = id => document.getElementById(id);
