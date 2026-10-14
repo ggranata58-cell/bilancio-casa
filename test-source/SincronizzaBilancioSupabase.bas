@@ -145,7 +145,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
                 rowById.Add id, dest: added = added + 1
             End If
             PutValue ws, dest, hdr, "idmovimento", id
-            PutValue ws, dest, hdr, "data", tmpWs.Cells(ar, apiHdr("movement_date")).Value
+            PutValue ws, dest, hdr, "data", IsoDateValue(CStr(tmpWs.Cells(ar, apiHdr("movement_date")).Value))
             PutValue ws, dest, hdr, "concetto", tmpWs.Cells(ar, apiHdr("concept")).Value
             PutValue ws, dest, hdr, "categoria", tmpWs.Cells(ar, apiHdr("category")).Value
             PutValue ws, dest, hdr, "tipo", tmpWs.Cells(ar, apiHdr("movement_type")).Value
@@ -255,4 +255,15 @@ End Function
 Private Sub PutValue(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal hdr As Object, ByVal key As String, ByVal value As Variant)
     If hdr.Exists(key) Then ws.Cells(rowNum, hdr(key)).Value = value
 End Sub
+
+Private Function IsoDateValue(ByVal s As String) As Variant
+    s = Trim$(s)
+    If Len(s) >= 10 And Mid$(s, 5, 1) = "-" And Mid$(s, 8, 1) = "-" Then
+        IsoDateValue = DateSerial(CInt(Left$(s, 4)), CInt(Mid$(s, 6, 2)), CInt(Mid$(s, 9, 2)))
+    ElseIf IsDate(s) Then
+        IsoDateValue = CDate(s)
+    Else
+        IsoDateValue = s
+    End If
+End Function
 
