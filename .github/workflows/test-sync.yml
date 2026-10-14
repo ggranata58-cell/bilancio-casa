@@ -9,6 +9,7 @@ on:
       - 'Bilancio_Casa_PWA_v0_2_0.zip.b64.ready'
       - 'patch_archive.py'
       - '.github/workflows/test-sync.yml'
+      - 'test-source/AggiornaMovimentiDaApp.bas'
   workflow_dispatch:
 
 permissions:
@@ -60,6 +61,32 @@ jobs:
           failed = [label for label, ok in checks.items() if not ok]
           if failed:
               raise SystemExit("Verifica fallita: " + "; ".join(failed))
+          PY
+
+      - name: Verifica macro Excel per sincronizzazione inversa
+        shell: bash
+        run: |
+          set -euo pipefail
+          MACRO="test-source/AggiornaMovimentiDaApp.bas"
+          test -f "$MACRO"
+          python3 - <<'PY'
+          from pathlib import Path
+          macro = Path("test-source/AggiornaMovimentiDaApp.bas").read_text(encoding="utf-8")
+          checks = {
+              "usa foglio Movimenti": 'Worksheets("Movimenti")' in macro,
+              "seleziona CSV esportato dall'app": 'GetOpenFilename("File CSV' in macro,
+              "aggiorna righe tramite ID stabile": 'idRows.Exists(movementId)' in macro,
+              "aggiunge nuovi movimenti senza ID duplicati": 'idRows.Add movementId, destRow' in macro,
+              "ignora righe senza ID": 'If Len(movementId) > 0 Then' in macro,
+              "non elimina righe assenti dal CSV": 'non sono state eliminate' in macro,
+              "mappa colonne per intestazione": 'tgtHeaders.Exists(CStr(key))' in macro,
+              "gestisce errori e ripristina Excel": 'Application.EnableEvents = True' in macro and 'Fail:' in macro,
+          }
+          for label, ok in checks.items():
+              print(("OK" if ok else "ERRORE") + " - " + label)
+          failed = [label for label, ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit("Verifica macro fallita: " + "; ".join(failed))
           PY
 
       - name: Espone il sorgente estratto nel solo branch di prova per analisi
