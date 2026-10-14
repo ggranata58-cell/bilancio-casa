@@ -78,6 +78,8 @@ jobs:
               "autenticazione password senza salvare la password": "/auth/v1/token?grant_type=password" in macro and "password = vbNullString" in macro,
               "non invia modifiche Excel su ID già esistenti senza confronto": "Rimandato: prima serve confronto con lo snapshot" in macro and 'HttpRequest("PATCH", url, body' not in macro,
               "scarica il database prima di elaborare le righe Excel": macro.index("Prima scarica il database") < macro.index("For r = headerRow + 1 To lastRow"),
+              "conserva il CSV remoto durante i nuovi inserimenti": "remoteCsv = response" in macro and "stm.WriteText remoteCsv" in macro,
+              "interrompe sui conflitti prima di sovrascrivere Excel": "ExcelRowMatchesRemote" in macro and "Conflitto sul movimento ID" in macro and "Nessuna delle due versioni è stata sovrascritta" in macro,
               "inserisce nuovi movimenti e recupera l'ID": '"/rest/v1/" & TABLE_NAME & "?select=id"' in macro and 'JsonGetString(response, "id")' in macro,
               "scarica i movimenti dal database": '"/rest/v1/" & TABLE_NAME & "?select=id,movement_date,concept,category,movement_type,amount,notes&user_id=eq."' in macro,
               "non cancella movimenti": "cancellato" in macro and "DELETE" not in macro,
