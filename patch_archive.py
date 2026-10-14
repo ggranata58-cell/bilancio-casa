@@ -63,7 +63,7 @@ if "withStableId" not in app:
           if (error) throw error;
         }
     """
-    batch_pattern = r"    let insertedBatches = 0;.*?\n        }"
+    batch_pattern = r"    let insertedBatches = 0;.*?insertedBatches\+\+;\s*\}"
     app, batch_count = re.subn(batch_pattern, new_batch.rstrip(), app, count=1, flags=re.S)
     if batch_count != 1:
         raise SystemExit(f"Expected one legacy import batch block, found {batch_count}")
