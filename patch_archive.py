@@ -40,12 +40,12 @@ if "withStableId" not in app:
     "        ...(hasStableId ? {} : { import_key: `xlsx:${fileHashValue}:${sheetName}:${r + 1}` })\n      });",
     "stable import key selection")
     old_batch = """    let insertedBatches = 0;
-        for (let i = 0; i < payload.length; i += 150) {
-          const part = payload.slice(i, i + 150);
-          const { error } = await db.from('bilancio_movements').upsert(part, { onConflict: 'user_id,import_key', ignoreDuplicates: true });
-          if (error) throw error;
-          insertedBatches++;
-        }
+     for (let i = 0; i < payload.length; i += 150) {
+       const part = payload.slice(i, i + 150);
+       const { error } = await db.from('bilancio_movements').upsert(part, { onConflict: 'user_id,import_key', ignoreDuplicates: true });
+       if (error) throw error;
+       insertedBatches++;
+     }
     """
     new_batch = """    const withStableId = payload.filter(m => m.id);
         const withoutStableId = payload.filter(m => !m.id);
