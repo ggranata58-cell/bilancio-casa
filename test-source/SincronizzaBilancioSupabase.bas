@@ -207,7 +207,7 @@ nizzazione interrotta per evitare perdita di dati."
         "Nuovi movimenti inviati da Excel: " & sent & vbCrLf & "Nuovi ID assegnati: " & added & vbCrLf & _
         "Movimenti ricevuti dal database: " & downloaded & vbCrLf & _
         "Nessun movimento è stato cancellato." & vbCrLf & _
-        "Nota: le modifiche su ID esistenti non vengono ancora propagate. Se Excel e app differiscono, la macro si ferma per proteggere entrambe le versioni.", vbInformation
+        "Le modifiche Excel e app vengono sincronizzate tramite snapshot. Se entrambe le copie sono state modificate in modo diverso, la macro si ferma senza sovrascrivere i dati.", vbInformation
     Exit Sub
 
 Fail:
