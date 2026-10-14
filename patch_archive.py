@@ -8,6 +8,7 @@ import zipfile
 
 archive = sys.argv[1] if len(sys.argv) > 1 else "Bilancio_Casa_PWA_v0_2_0.zip"
 target = "bilancio-casa-pwa/app.js"
+html_target = "bilancio-casa-pwa/index.html"
 
 with zipfile.ZipFile(archive, "r") as src:
     bad = src.testzip()
@@ -17,6 +18,20 @@ with zipfile.ZipFile(archive, "r") as src:
 
 if target not in files:
     raise SystemExit(f"App source not found in archive: {target}")
+
+if html_target not in files:
+    raise SystemExit(f"HTML source not found in archive: {html_target}")
+html_info, html_raw = files[html_target]
+html = html_raw.decode("utf-8")
+old_caption = '<span class="stat-caption">Somma delle uscite registrate</span>'
+new_caption = '<span class="stat-caption">Spese ordinarie, escluse le uscite speciali</span>'
+if old_caption in html:
+    if html.count(old_caption) != 1:
+        raise SystemExit("Expected one monthly expenses caption")
+    html = html.replace(old_caption, new_caption, 1)
+elif new_caption not in html:
+    raise SystemExit("Monthly expenses caption not found")
+files[html_target] = (html_info, html.encode("utf-8"))
 
 info, raw = files[target]
 app = raw.decode("utf-8")
@@ -276,6 +291,9 @@ try:
         patched = check.read(target).decode("utf-8")
         if "withStableId" not in patched or "ID movimento" not in patched:
             raise SystemExit("Patch verification failed.")
+        patched_html = check.read(html_target).decode("utf-8")
+        if '<span class="stat-caption">Spese ordinarie, escluse le uscite speciali</span>' not in patched_html:
+            raise SystemExit("Monthly expenses caption patch verification failed.")
         for required in ["function renderCashPanel()", "cashBalanceInput", "cashMonthWithdrawals", "cashTotalWithdrawals", "localStorage.setItem(cashBalanceKey()", "renderCashPanel();"]:
             if required not in patched:
                 raise SystemExit(f"Cash summary patch verification failed: {required}")
