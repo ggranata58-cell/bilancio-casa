@@ -58,7 +58,7 @@ jobs:
               "righe senza ID mantengono la deduplicazione": "onConflict: 'user_id,import_key', ignoreDuplicates: true" in app,
               "ID stabile usa il ramo condizionale senza sovrascrivere la chiave": "...(hasStableId ? { id: suppliedId } : {})" in app,
               "riepilogo contanti e prelievi presente": all(x in app for x in ["function renderCashPanel()", "cashBalanceInput", "cashMonthWithdrawals", "cashTotalWithdrawals"]),
-              "saldo contanti iniziale di 50 euro e salvataggio locale": "'50.00'" in app and "localStorage.setItem(cashBalanceKey()" in app,
+              "saldo contanti iniziale di 50 euro e cache locale": "cashBalanceKey()" in app and "localValue === null ? 50 : localValue" in app and "localStorage.setItem(key, cloudCashBalance.toFixed(2))" in app,
               "saldo contanti modificabile con controllo importo": "function saveCashBalance()" in app and "value < 0" in app,
               "solo le categorie esplicitamente escluse escono dalle spese ordinarie": "new Set(['Movimenti esclusi', 'Prelievo contanti'])" in app and "movement_type === 'Uscita' && !isExcludedMovement(m)" in app,
               "Tasas y Intereses conserva il trattamento speciale": "const SPECIAL_CATEGORY = 'Tasas y Intereses';" in app and "else if (m.category === SPECIAL_CATEGORY)" in app,
