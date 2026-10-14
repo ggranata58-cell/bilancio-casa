@@ -98,8 +98,8 @@ else:
     if duplicate is not None:
         del lines[duplicate]
     app = "\n".join(lines) + "\n"
-    if "...(hasStableId ? { id: suppliedId } : { import_key:" not in app:
-        raise SystemExit("Stable-ID conditional import_key assignment not found.")
+    if "...(hasStableId ? { id: suppliedId } : {})" not in app or "...(hasStableId ? {} : { import_key:" not in app:
+        raise SystemExit("Stable-ID conditional ID/import_key assignment not found.")
     if "upsert(part, { onConflict: 'id' })" not in app:
         raise SystemExit("Stable-ID upsert behavior is missing.")
 
