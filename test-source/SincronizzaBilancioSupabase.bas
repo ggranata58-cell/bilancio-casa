@@ -351,3 +351,29 @@ Private Function LoadSyncSnapshot(ByVal snapWs As Worksheet) As Object
     Set LoadSyncSnapshot = d
 End Function
 
+
+Private Sub SaveSyncSnapshot(ByVal snapWs As Worksheet, ByVal ws As Worksheet, ByVal hdr As Object, ByVal rowById As Object)
+    Dim k As Variant, r As Long, dest As Long, id As String
+    snapWs.Cells.ClearContents
+    snapWs.Cells(1, 1).Value = "id"
+    snapWs.Cells(1, 2).Value = "data"
+    snapWs.Cells(1, 3).Value = "concetto"
+    snapWs.Cells(1, 4).Value = "categoria"
+    snapWs.Cells(1, 5).Value = "tipo"
+    snapWs.Cells(1, 6).Value = "importo"
+    snapWs.Cells(1, 7).Value = "note"
+    dest = 2
+    For Each k In rowById.Keys
+        id = CStr(k): r = CLng(rowById(id))
+        snapWs.Cells(dest, 1).Value = id
+        snapWs.Cells(dest, 2).Value = ws.Cells(r, hdr("data")).Value
+        snapWs.Cells(dest, 3).Value = ws.Cells(r, hdr("concetto")).Value
+        snapWs.Cells(dest, 4).Value = ws.Cells(r, hdr("categoria")).Value
+        snapWs.Cells(dest, 5).Value = ws.Cells(r, hdr("tipo")).Value
+        snapWs.Cells(dest, 6).Value = CDbl(ws.Cells(r, hdr("importo")).Value)
+        snapWs.Cells(dest, 7).Value = IIf(hdr.Exists("note"), ws.Cells(r, hdr("note")).Value, "")
+        dest = dest + 1
+    Next k
+    snapWs.Visible = xlSheetVeryHidden
+End Sub
+
