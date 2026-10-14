@@ -408,3 +408,25 @@ NotMatch:
     RemoteRowMatchesSnapshot = False
 End Function
 
+
+Private Function PatchMovementFromExcel(ByVal ws As Worksheet, ByVal excelRow As Long, ByVal hdr As Object, _
+    ByVal id As String, ByVal userId As String, ByVal token As String, ByRef status As Long, ByRef response As String) As Boolean
+    Dim body As String, url As String, amountText As String
+    body = "{""movement_date"":" & JsonString(Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd")) & _
+        ",""concept"":" & JsonString(CStr(ws.Cells(excelRow, hdr("concetto")).Value)) & _
+        ",""category"":" & JsonString(CStr(ws.Cells(excelRow, hdr("categoria")).Value)) & _
+        ",""movement_type"":" & JsonString(CStr(ws.Cells(excelRow, hdr("tipo")).Value)) & _
+        ",""amount"":" & Replace(Format$(CDbl(ws.Cells(excelRow, hdr("importo")).Value), "0.00"), ",", ".") & _
+        ",""notes"":" & JsonString(IIf(hdr.Exists("note"), CStr(ws.Cells(excelRow, hdr("note")).Value), "")) & "}"
+    url = SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?id=eq." & id & "&user_id=eq." & userId
+    response = HttpRequest("PATCH", url, body, "application/json", token, status, "return=representation")
+    If status < 200 Or status >= 300 Then
+        PatchMovementFromExcel = False
+    ElseIf InStr(1, response, id, vbTextCompare) = 0 Then
+        status = 0
+        PatchMovementFromExcel = False
+    Else
+        PatchMovementFromExcel = True
+    End If
+End Function
+
