@@ -137,7 +137,11 @@ Public Sub SincronizzaBilancioCasaDiretto()
         End If
     Else
         For r = headerRow + 1 To ws.Cells(ws.Rows.Count, idCol).End(xlUp).Row
-            id = Trim$(CStr(ws.Cells(r, idCol).Value)): If Len(id) > 0 Th    ' Confronta le due copie con l'ultimo snapshot riuscito.
+            id = Trim$(CStr(ws.Cells(r, idCol).Value)): If Len(id) > 0 Then If Not rowById.Exists(id) Then rowById.Add id, r
+        Next r
+    End If
+
+    ' Confronta le due copie con l'ultimo snapshot riuscito.
     For Each k In rowById.Keys
         id = CStr(k)
         If apiRows.Exists(id) Then
@@ -163,15 +167,11 @@ Public Sub SincronizzaBilancioCasaDiretto()
                         tmpWs.Cells(ar, apiHdr("notes")).Value = IIf(hdr.Exists("note"), ws.Cells(r, hdr("note")).Value, "")
                     End If
                 ElseIf Not ExcelRowMatchesRemote(ws, r, hdr, tmpWs, ar, apiHdr) Then
-                    Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Non esiste ancora uno snapshot affidabile e Excel e app contengono dati diversi. Nessuna versione è stata sovrascritta."
+                    Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Non esiste ancora uno snapshot affidabile e Excel e app contengono dati diversi. Nessuna delle due versioni è stata sovrascritta."
                 End If
             End If
         ElseIf Not newIds.Exists(id) Then
             Err.Raise vbObjectError + 713, , "L'ID " & id & " presente in Excel non risulta nel database. Sincronizzazione interrotta per evitare perdita di dati."
-        End If
-    Next k
-
-nizzazione interrotta per evitare perdita di dati."
         End If
     Next k
 
@@ -207,7 +207,7 @@ nizzazione interrotta per evitare perdita di dati."
         "Nuovi movimenti inviati da Excel: " & sent & vbCrLf & "Nuovi ID assegnati: " & added & vbCrLf & _
         "Movimenti ricevuti dal database: " & downloaded & vbCrLf & _
         "Nessun movimento è stato cancellato." & vbCrLf & _
-        "Le modifiche Excel e app vengono sincronizzate tramite snapshot. Se entrambe le copie sono state modificate in modo diverso, la macro si ferma senza sovrascrivere i dati.", vbInformation
+        "Nota: le modifiche su ID esistenti non vengono ancora propagate. Se Excel e app differiscono, la macro si ferma per proteggere entrambe le versioni.", vbInformation
     Exit Sub
 
 Fail:
