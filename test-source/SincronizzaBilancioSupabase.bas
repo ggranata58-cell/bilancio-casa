@@ -79,7 +79,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
 
     ' Pre-controllo dei dati Excel: nessuna scrittura al database in questa fase.
     For r = headerRow + 1 To lastRow
-        If Len(Trim$(CStr(ws.Cells(r, hdr("concetto")).Value))) > 0 And IsDate(ws.Cells(r, hdr("data")).Value) Then
+        If Len(Trim$(CStr(ws.Cells(r, hdr("concetto")).Value))) > 0 And IsDate(ws.Cells(r, hdr("data")).Value) And LCase$(Trim$(CStr(ws.Cells(r, hdr("tipo")).Value))) <> "saldo iniziale" Then
             If Not IsNumeric(ws.Cells(r, hdr("importo")).Value) Or CDbl(ws.Cells(r, hdr("importo")).Value) <= 0 Then
                 Err.Raise vbObjectError + 705, , "Importo non valido alla riga " & r & ". Nessuna riga verrà sincronizzata."
             End If
@@ -188,7 +188,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     ' Solo dopo aver verificato tutti gli ID esistenti, invia le righe Excel senza ID.
     ' Le nuove righe vengono aggiunte anche alla copia remota in memoria per la riconciliazione finale.
     For r = headerRow + 1 To lastRow
-        If Len(Trim$(CStr(ws.Cells(r, hdr("concetto")).Value))) > 0 And IsDate(ws.Cells(r, hdr("data")).Value) Then
+        If Len(Trim$(CStr(ws.Cells(r, hdr("concetto")).Value))) > 0 And IsDate(ws.Cells(r, hdr("data")).Value) And LCase$(Trim$(CStr(ws.Cells(r, hdr("tipo")).Value))) <> "saldo iniziale" Then
             id = Trim$(CStr(ws.Cells(r, idCol).Value))
             If Len(id) = 0 Then
                 body = "{""user_id"":" & JsonString(userId) & _
