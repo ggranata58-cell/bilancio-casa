@@ -15,7 +15,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     Dim email As String, password As String, token As String, userId As String
     Dim ws As Worksheet, hdr As Object, rowById As Object, apiRows As Object, newIds As Object
     Dim headerRow As Long, lastRow As Long, idCol As Long, c As Long, r As Long
-    Dim id As String, body As String, url As String, response As String
+    Dim id As String, body As String, url As String, response As String, remoteCsv As String
     Dim sent As Long, added As Long, downloaded As Long, updated As Long
     Dim oldCalc As XlCalculation, oldEvents As Boolean, oldScreen As Boolean
     Dim lo As ListObject, targetTable As ListObject, newRow As ListRow
@@ -71,6 +71,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     url = SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?select=id,movement_date,concept,category,movement_type,amount,notes&user_id=eq." & userId & "&order=movement_date.asc"
     response = HttpRequest("GET", url, "", "text/csv", token, httpStatus)
     If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 710, , "Errore scaricando i movimenti (HTTP " & httpStatus & "): " & Left$(response, 300)
+    remoteCsv = response
 
     For r = headerRow + 1 To lastRow
         If Len(Trim$(CStr(ws.Cells(r, hdr("concetto")).Value))) > 0 And IsDate(ws.Cells(r, hdr("data")).Value) Then
@@ -105,7 +106,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     ' Il CSV remoto è già stato scaricato prima di qualsiasi invio.
     tempPath = Environ$("TEMP") & "\BilancioCasa_api_sync.csv"
     Set stm = CreateObject("ADODB.Stream")
-    stm.Type = 2: stm.Charset = "utf-8": stm.Open: stm.WriteText response: stm.SaveToFile tempPath, 2: stm.Close
+    stm.Type = 2: stm.Charset = "utf-8": stm.Open: stm.WriteText remoteCsv: stm.SaveToFile tempPath, 2: stm.Close
     Workbooks.OpenText Filename:=tempPath, Origin:=65001, DataType:=xlDelimited, TextQualifier:=xlTextQualifierDoubleQuote, _
         ConsecutiveDelimiter:=False, Comma:=True, Semicolon:=False, Tab:=False, Local:=True
     Set tmpWb = ActiveWorkbook: Set tmpWs = tmpWb.Worksheets(1)
