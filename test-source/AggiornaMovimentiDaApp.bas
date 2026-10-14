@@ -14,6 +14,7 @@ Public Sub AggiornaMovimentiDaApp()
     Dim key As Variant, oldCalc As XlCalculation
     Dim lo As ListObject, targetTable As ListObject, newListRow As ListRow
     Dim numeroErrore As Long, descrizioneErrore As String
+    Dim csvText As String, tempPath As String, stm As Object
 
     On Error GoTo Fail
     Set target = ThisWorkbook.Worksheets("Movimenti")
@@ -25,7 +26,33 @@ Public Sub AggiornaMovimentiDaApp()
     Application.EnableEvents = False
     Application.Calculation = xlCalculationManual
 
-    Workbooks.OpenText Filename:=CStr(filePath), Origin:=65001, DataType:=xlDelimited, _
+    ' Excel può scambiare un CSV che inizia con "ID" per un file SYLK.
+    ' Crea una copia temporanea UTF-8 cambiando solo "ID" in "Id" nella prima intestazione.
+    ' Il CSV originale esportato dall'app resta intatto.
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 2
+    stm.Charset = "utf-8"
+    stm.Open
+    stm.LoadFromFile CStr(filePath)
+    csvText = stm.ReadText
+    stm.Close
+
+    If Len(csvText) > 0 Then
+        If Left$(csvText, 1) = ChrW(65279) Then csvText = Mid$(csvText, 2)
+        If UCase$(Left$(csvText, 2)) = "ID" Then csvText = "Id" & Mid$(csvText, 3)
+    End If
+
+    tempPath = Environ$("TEMP") & "\BilancioCasa_import_temp.csv"
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 2
+    stm.Charset = "utf-8"
+    stm.Open
+    stm.WriteText csvText
+    stm.SaveToFile tempPath, 2
+    stm.Close
+    Set stm = Nothing
+
+    Workbooks.OpenText Filename:=tempPath, Origin:=65001, DataType:=xlDelimited, _
         TextQualifier:=xlTextQualifierDoubleQuote, Semicolon:=True, Comma:=False, Tab:=False, _
         Local:=True
     Set srcWb = ActiveWorkbook
@@ -140,6 +167,7 @@ Public Sub AggiornaMovimentiDaApp()
     Next r
 
     srcWb.Close SaveChanges:=False
+    If Len(tempPath) > 0 Then Kill tempPath
     Application.Calculation = oldCalc
     Application.EnableEvents = True
     Application.ScreenUpdating = True
@@ -154,6 +182,9 @@ Fail:
     descrizioneErrore = Err.Description
     On Error Resume Next
     If Not srcWb Is Nothing Then srcWb.Close SaveChanges:=False
+    If Len(tempPath) > 0 Then
+        If Len(Dir$(tempPath)) > 0 Then Kill tempPath
+    End If
     Application.Calculation = oldCalc
     Application.EnableEvents = True
     Application.ScreenUpdating = True
