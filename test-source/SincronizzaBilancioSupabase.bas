@@ -153,7 +153,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
                         ' Aggiornamento differito: prima si controllano tutti i conflitti.
                     End If
                 ElseIf Not ExcelRowMatchesRemote(ws, r, hdr, tmpWs, ar, apiHdr) Then
-                    Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Non esiste ancora uno snapshot affidabile e Excel e app contengono dati diversi. Nessuna delle due versioni è stata sovrascritta."
+                    Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Campi diversi: " & DescribeRowDifferences(ws, r, hdr, tmpWs, ar, apiHdr) & ". Nessuno dei due dati è stato sovrascritto."
                 End If
             End If
         ElseIf Not newIds.Exists(id) Then
@@ -376,6 +376,26 @@ Private Function ExcelRowMatchesRemote(ByVal ws As Worksheet, ByVal excelRow As 
 NotMatch:
     ExcelRowMatchesRemote = False
 End Function
+
+
+Private Function DescribeRowDifferences(ByVal ws As Worksheet, ByVal excelRow As Long, ByVal hdr As Object, _
+    ByVal remoteWs As Worksheet, ByVal remoteRow As Long, ByVal apiHdr As Object) As String
+    Dim result As String
+    On Error GoTo SafeExit
+    If Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd") <> Left$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_date")).Value), 10) Then result = result & "Data; "
+    If Trim$(CStr(ws.Cells(excelRow, hdr("concetto")).Value)) <> Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("concept")).Value)) Then result = result & "Concetto; "
+    If Trim$(CStr(ws.Cells(excelRow, hdr("categoria")).Value)) <> Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("category")).Value)) Then result = result & "Categoria; "
+    If LCase$(Trim$(CStr(ws.Cells(excelRow, hdr("tipo")).Value))) <> LCase$(Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("movement_type")).Value)) Then result = result & "Tipo; "
+    If Abs(CDbl(ws.Cells(excelRow, hdr("importo")).Value) - Val(Replace(CStr(remoteWs.Cells(remoteRow, apiHdr("amount")).Value), ",", "."))) > 0.005 Then result = result & "Importo; "
+    If hdr.Exists("note") Then
+        If Trim$(CStr(ws.Cells(excelRow, hdr("note")).Value)) <> Trim$(CStr(remoteWs.Cells(remoteRow, apiHdr("notes")).Value)) Then result = result & "Note; "
+    End If
+SafeExit:
+    If Len(result) = 0 Then result = "differenza non identificata"
+    If Right$(result, 2) = "; " Then result = Left$(result, Len(result) - 2)
+    DescribeRowDifferences = result
+End Function
+
 
 Private Function IsoDateValue(ByVal s As String) As Variant
     s = Trim$(s)
