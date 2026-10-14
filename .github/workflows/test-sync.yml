@@ -46,12 +46,16 @@ jobs:
           mkdir extracted
           unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
           APP="extracted/bilancio-casa-pwa/app.js"
+          HTML="extracted/bilancio-casa-pwa/index.html"
           test -f "$APP"
+          test -f "$HTML"
           node --check "$APP"
           python3 - <<'PY'
           from pathlib import Path
           app = Path("extracted/bilancio-casa-pwa/app.js").read_text(encoding="utf-8")
+          html = Path("extracted/bilancio-casa-pwa/index.html").read_text(encoding="utf-8")
           checks = {
+              "etichetta uscite coerente con le spese ordinarie": '<span class="stat-caption">Spese ordinarie, escluse le uscite speciali</span>' in html,
               "export CSV include tutte le colonne": "['ID movimento', 'Data', 'Giorno', 'Concetto', 'Categoria', 'Tipo', 'Importo', 'Importo +/-', 'Saldo', 'Mese', 'Note']" in app,
               "export CSV usa l'ID reale del movimento": "m.id || ''" in app,
               "export CSV calcola importo firmato": "signed(m)" in app,
