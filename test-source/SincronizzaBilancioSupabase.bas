@@ -286,7 +286,7 @@ Private Function HttpRequest(ByVal method As String, ByVal url As String, ByVal 
 End Function
 
 Private Function JsonString(ByVal s As String) As String
-    s = Replace(s, "\", "\\"): s = Replace(s, """", "\"""")
+    s = Replace(s, """", "\""")
     s = Replace(s, vbCr, "\r"): s = Replace(s, vbLf, "\n"): s = Replace(s, vbTab, "\t")
     JsonString = """" & s & """"
 End Function
