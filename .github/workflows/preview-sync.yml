@@ -1,9 +1,7 @@
-name: Pubblica anteprima sincronizzazione senza sostituire la home
-
+name: Ripristino pubblicazione dal main senza modificare main
 on:
   push:
-    branches:
-      - test/sync-bidirezionale
+    branches: [test/sync-bidirezionale]
     paths:
       - '.github/workflows/preview-sync.yml'
   workflow_dispatch:
@@ -15,55 +13,462 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
-  preview:
-    runs-on: ubuntu-latest
+  deploy:
     environment:
-      name: preview
+      name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout ramo di prova
+      - name: Scarica i sorgenti ufficiali da main (sola lettura)
         uses: actions/checkout@v4
-
-      - name: Recupera la pubblicazione attuale senza modificarla
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p public
-          wget --mirror --page-requisites --convert-links --adjust-extension --no-parent \
-            --directory-prefix=mirror https://ggranata58-cell.github.io/bilancio-casa/
-          test -s mirror/ggranata58-cell.github.io/bilancio-casa/index.html
-          cp -a mirror/ggranata58-cell.github.io/bilancio-casa/. public/
-          test -s public/index.html
-          echo "Pubblicazione esistente copiata; se il mirror non è completo il workflow si ferma prima del deploy."
-
-      - name: Ricostruisce e verifica il pacchetto di prova
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f Bilancio_Casa_PWA_v0_2_0.zip.b64.ready
-          cat Bilancio_Casa_PWA_v0_2_0.zip.b64.part{01,02,03,04,05,06} | base64 --decode > Bilancio_Casa_PWA_v0_2_0.zip
-          echo "394b3317a48742bfed152e9ec1bd00e9b339139fe12a1092a76461a5b43ca9f6  Bilancio_Casa_PWA_v0_2_0.zip" | sha256sum --check
-          unzip -tq Bilancio_Casa_PWA_v0_2_0.zip
-          python3 patch_archive.py Bilancio_Casa_PWA_v0_2_0.zip
-          mkdir extracted
-          unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
-          node --check extracted/bilancio-casa-pwa/app.js
-          mkdir -p public/preview
-          cp -a extracted/bilancio-casa-pwa/. public/preview/
-          test -s public/preview/index.html
-          echo "Anteprima di prova preparata in /preview/."
+        with:
+          ref: main
 
       - name: Configura GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Carica sito esistente più anteprima
+      - name: Ricostruisce e verifica il pacchetto
+        run: |
+          cat Bilancio_Casa_PWA_v0_2_0.zip.b64.part0* | base64 --decode > Bilancio_Casa_PWA_v0_2_0.zip
+          echo "394b3317a48742bfed152e9ec1bd00e9b339139fe12a1092a76461a5b43ca9f6  Bilancio_Casa_PWA_v0_2_0.zip" | sha256sum --check
+          unzip -tq Bilancio_Casa_PWA_v0_2_0.zip
+          python3 patch_archive.py Bilancio_Casa_PWA_v0_2_0.zip
+
+      - name: Estrai il progetto PWA
+        run: |
+          mkdir public extracted
+          unzip -q Bilancio_Casa_PWA_v0_2_0.zip -d extracted
+     
+      - name: Corregge conferma email
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path("extracted/bilancio-casa-pwa")
+          app_path = root / "app.js"
+          app = app_path.read_text(encoding="utf-8")
+          start = app.index("  async function handleAuthSubmit(event) {")
+          end = app.index("  function switchAuthMode(mode) {", start)
+          replacement = """  function appRedirectUrl() {
+              // Usa la radice della PWA corrente, non il Site URL predefinito di Supabase (che può essere localhost).
+              const target = new URL('./', window.location.href);
+              target.search = '';
+              target.hash = '';
+              return target.href;
+            }
+
+            async function handleAuthSubmit(event) {
+              event.preventDefault();
+              const email = $('authEmail').value.trim();
+              const password = $('authPassword').value;
+              const button = $('authSubmit');
+              setButtonBusy(button, true);
+              setAuthMessage('');
+              try {
+                if (authMode === 'signup') {
+                  const { data, error } = await db.auth.signUp({
+                    email,
+                    password,
+                    options: { emailRedirectTo: appRedirectUrl() }
+                  });
+                  if (error) throw error;
+                  if (data.session) {
+                    currentUser = data.user;
+                    await afterLogin();
+                  } else {
+                    setAuthMessage('Registrazione avviata. Se l’email non arriva, controlla anche Spam e usa “Invia di nuovo l’email di conferma”.');
+                  }
+                } else {
+                  const { data, error } = await db.auth.signInWithPassword({ email, password });
+                  if (error) throw error;
+                  currentUser = data.user;
+                  await afterLogin();
+                }
+              } catch (error) {
+                setAuthMessage(error?.message || 'Non è stato possibile completare l’accesso.', true);
+              } finally {
+                setButtonBusy(button, false);
+              }
+            }
+
+            async function resendConfirmationEmail() {
+              const email = $('authEmail').value.trim();
+              if (!email) {
+                setAuthMessage('Inserisci prima la tua email nel campo qui sopra.', true);
+                $('authEmail').focus();
+                return;
+              }
+              const button = $('authResendBtn');
+              setButtonBusy(button, true, 'Invio in corso…');
+              setAuthMessage('');
+              try {
+                const { error } = await db.auth.resend({
+                  type: 'signup',
+                  email,
+                  options: { emailRedirectTo: appRedirectUrl() }
+                });
+                if (error) throw error;
+                setAuthMessage('Richiesta inviata. Controlla Posta in arrivo e Spam; il link porterà a Bilancio Casa.');
+              } catch (error) {
+                setAuthMessage(error?.message || 'Non è stato possibile richiedere una nuova email di conferma.', true);
+              } finally {
+                setButtonBusy(button, false);
+              }
+            }
+
+          """
+          app = app[:start] + replacement + app[end:]
+
+          old_render = "renderMovementList($('allMovements'), rows.slice(0, 100), true);"
+          new_render = """const container = $('allMovements');
+              let controls = $('movementArchiveControls');
+              if (!controls) {
+                controls = document.createElement('div');
+                controls.id = 'movementArchiveControls';
+                controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0';
+                const info = document.createElement('span');
+                info.id = 'movementArchivePageInfo';
+                info.className = 'small-note';
+                const prev = document.createElement('button');
+                prev.id = 'movementArchivePrev';
+                prev.type = 'button';
+                prev.className = 'button button-soft';
+                prev.textContent = '‹ Precedente';
+                const next = document.createElement('button');
+                next.id = 'movementArchiveNext';
+                next.type = 'button';
+                next.className = 'button button-soft';
+                next.textContent = 'Successiva ›';
+                controls.append(prev, info, next);
+                container.parentNode.insertBefore(controls, container);
+                prev.addEventListener('click', () => { renderAllMovements.page = Math.max(0, (renderAllMovements.page || 0) - 1); renderAllMovements(); });
+                next.addEventListener('click', () => { renderAllMovements.page = (renderAllMovements.page || 0) + 1; renderAllMovements(); });
+              }
+              const pageSize = 10;
+              const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+              renderAllMovements.page = Math.min(renderAllMovements.page || 0, pageCount - 1);
+              const page = renderAllMovements.page;
+              renderMovementList(container, rows.slice(page * pageSize, (page + 1) * pageSize), true);
+              $('movementArchivePageInfo').textContent = rows.length ? `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, rows.length)} di ${rows.length} movimenti` : 'Nessun movimento';
+              $('movementArchivePrev').disabled = page === 0;
+              $('movementArchiveNext').disabled = page >= pageCount - 1;"""
+          if old_render not in app:
+              raise SystemExit("Riga di visualizzazione archivio non trovata")
+          app = app.replace(old_render, new_render, 1)
+          
+          old_sort = "const rows = [...movements].filter(inAccountingPeriod).sort(sortLatest);"
+          new_sort = "const rows = [...movements].filter(inAccountingPeriod).sort(sortLatest);"
+          if old_sort not in app:
+              raise SystemExit("Ordinamento della tabella movimenti non trovato")
+          app = app.replace(old_sort, new_sort, 1)
+
+          binding = "    $('authForm').addEventListener('submit', handleAuthSubmit);"
+          if "$('authResendBtn').addEventListener" not in app:
+              if binding not in app:
+                  raise SystemExit("Associazione del modulo email non trovata")
+              app = app.replace(binding, binding + "\n    $('authResendBtn').addEventListener('click', resendConfirmationEmail);", 1)
+          if "emailRedirectTo: appRedirectUrl()" not in app:
+              raise SystemExit("Redirect email non inserito")
+          refresh_anchor = """  async function refreshData() {
+              await loadSettings();
+              await loadMovements();
+              renderAll();
+            }"""
+          refresh_patch = """  async function refreshData() {
+              await loadSettings();
+              await loadMovements();
+              renderAll();
+            }
+
+            // Aggiorna i dati dal cloud senza ricaricare la pagina.
+            // Evita il refresh mentre l'utente sta interagendo con un campo di input.
+            let automaticRefreshRunning = false;
+            setInterval(async () => {
+              if (!currentUser || document.hidden || automaticRefreshRunning) return;
+              const active = document.activeElement;
+              if (active && (active.matches('input, textarea, select') || active.isContentEditable)) return;
+              automaticRefreshRunning = true;
+              try {
+                await loadMovements();
+                renderAll();
+              } catch (error) {
+                console.warn('Aggiornamento automatico non riuscito:', error);
+              } finally {
+                automaticRefreshRunning = false;
+              }
+            }, 30000);"""
+          import re
+          if "automaticRefreshRunning" not in app:
+              refresh_pattern = r"  async function refreshData\(\) \{\s+await loadSettings\(\);\s+await loadMovements\(\);\s+renderAll\(\);\s+\}"
+              if not re.search(refresh_pattern, app):
+                  raise SystemExit("Funzione refreshData non trovata: aggiornamento automatico non applicato")
+              app = re.sub(refresh_pattern, lambda match: refresh_patch, app, count=1)
+          backup_patch = r"""
+            async function createFullBackup() {
+              const button = $('backupCreateBtn'); button.disabled = true; button.textContent = 'Preparazione…';
+              try {
+                const results = await Promise.all([
+                  db.from('bilancio_movements').select('id,movement_date,concept,category,movement_type,amount,notes,import_key,created_at').eq('user_id', currentUser.id).order('movement_date', { ascending: true }),
+                  db.from('bilancio_settings').select('opening_date,opening_balance,daily_budget,updated_at').eq('user_id', currentUser.id).maybeSingle(),
+                  db.from('bilancio_quota_storico').select('valid_from,daily_budget,tax_reserve_daily,created_at,updated_at').eq('user_id', currentUser.id).order('valid_from', { ascending: true })
+                ]);
+                for (const result of results) if (result.error) throw result.error;
+                const backup = { format: 'bilancio-casa-backup', format_version: 1, created_at: new Date().toISOString(),
+                  data: { movements: results[0].data || [], settings: results[1].data, quota_history: results[2].data || [] } };
+                const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8' }));
+                const link = document.createElement('a'); link.href = url;
+                link.download = 'bilancio-casa-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+                showNotice('Backup completo scaricato. Conserva il file in un luogo sicuro.');
+              } catch (error) { showNotice('Backup non riuscito: ' + (error?.message || error), 'error'); }
+              finally { button.disabled = false; button.textContent = 'Scarica backup completo'; }
+            }
+            async function restoreFullBackup(file) {
+              if (!file) return; const input = $('backupRestoreFile');
+              try {
+                const backup = JSON.parse(await file.text());
+                if (backup?.format !== 'bilancio-casa-backup' || backup?.format_version !== 1 ||
+                    !Array.isArray(backup?.data?.movements) || !Array.isArray(backup?.data?.quota_history) || !backup?.data?.settings)
+                  throw new Error('Il file non è un backup Bilancio Casa valido.');
+                const data = backup.data;
+                if (!window.confirm('Ripristinare questo backup? I movimenti con lo stesso identificativo e le impostazioni/quote corrispondenti saranno aggiornati; gli altri movimenti saranno mantenuti.')) return;
+                const rows = data.movements.map(row => ({ id: row.id, user_id: currentUser.id, movement_date: row.movement_date,
+                  concept: row.concept, category: row.category, movement_type: row.movement_type, amount: row.amount,
+                  notes: row.notes ?? null, import_key: row.import_key ?? null, created_at: row.created_at }));
+                if (rows.some(row => !row.id || !row.movement_date || !row.concept || !['Entrata','Uscita'].includes(row.movement_type) || !Number.isFinite(Number(row.amount))))
+                  throw new Error('Il backup contiene movimenti incompleti o non validi.');
+                const s = data.settings;
+                const settingsRow = { user_id: currentUser.id, opening_date: s.opening_date, opening_balance: Number(s.opening_balance),
+                  daily_budget: Number(s.daily_budget), updated_at: s.updated_at || new Date().toISOString() };
+                if (!settingsRow.opening_date || !Number.isFinite(settingsRow.opening_balance) || !Number.isFinite(settingsRow.daily_budget))
+                  throw new Error('Le impostazioni del backup non sono valide.');
+                const quotas = data.quota_history.map(row => ({ user_id: currentUser.id, valid_from: row.valid_from,
+                  daily_budget: Number(row.daily_budget), tax_reserve_daily: Number(row.tax_reserve_daily),
+                  created_at: row.created_at, updated_at: row.updated_at }));
+                if (quotas.some(row => !row.valid_from || !Number.isFinite(row.daily_budget) || !Number.isFinite(row.tax_reserve_daily) || row.daily_budget < 0 || row.tax_reserve_daily < 0))
+                  throw new Error('Lo storico delle quote nel backup non è valido.');
+                const button = $('backupRestoreBtn'); button.disabled = true; button.textContent = 'Ripristino…';
+                try {
+                  for (let i=0; i<rows.length; i+=200) {
+                    const batch=rows.slice(i,i+200); if (!batch.length) continue;
+                    const { error } = await db.from('bilancio_movements').upsert(batch, { onConflict: 'id' }); if (error) throw error;
+                  }
+                  const { error: settingsError } = await db.from('bilancio_settings').upsert(settingsRow, { onConflict: 'user_id' });
+                  if (settingsError) throw settingsError;
+                  if (quotas.length) {
+                    const { error: quotaError } = await db.from('bilancio_quota_storico').upsert(quotas, { onConflict: 'user_id,valid_from' });
+                    if (quotaError) throw quotaError;
+                  }
+                  await loadSettings(); await loadMovements(); renderAll();
+                  showNotice('Backup ripristinato. I movimenti non presenti nel file sono stati mantenuti.');
+                } finally { button.disabled = false; button.textContent = 'Ripristina backup'; }
+              } catch (error) { showNotice('Ripristino non riuscito: ' + (error?.message || error), 'error'); }
+              finally { input.value = ''; }
+            }
+          """
+          if "async function createFullBackup()" not in app:
+              init_marker = "  async function initialize() {"
+              if init_marker not in app: raise SystemExit("Punto di inserimento backup non trovato")
+              app = app.replace(init_marker, backup_patch + "\n" + init_marker, 1)
+          app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
+
+          app_path.write_text(app, encoding="utf-8")
+
+          html_path = root / "index.html"
+          html = html_path.read_text(encoding="utf-8")
+          html = html.replace("xlsx@0.18.12/dist/xlsx.full.min.js", "xlsx@0.18.5/dist/xlsx.full.min.js")
+          marker = '<p id="authMessage" class="small-note" role="status" aria-live="polite"></p>'
+          if 'id="authResendBtn"' not in html:
+              if marker not in html:
+                  raise SystemExit("Area messaggi di autenticazione non trovata")
+              html = html.replace(marker, marker + '\n      <button id="authResendBtn" class="text-button" type="button">Invia di nuovo l’email di conferma</button>', 1)
+          html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.5 · sincronizzazione cloud protetta')
+          archive_script = r"""<script>
+          (() => {
+            const SIZE=10, states=new WeakMap();
+            const norm=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+            function dateOf(row){
+              const s=(row.cells[0]?.textContent||'').trim(),m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+              if(m)return new Date(+m[3],+m[2]-1,+m[1]).getTime();
+              const d=Date.parse(s);return Number.isNaN(d)?0:d;
+            }
+            function findTable(){
+              return [...document.querySelectorAll('table')].find(t=>{
+                const h=[...t.querySelectorAll('th,td')].slice(0,24).map(x=>norm(x.textContent)).join('|');
+                return h.includes('data')&&h.includes('concetto')&&h.includes('categoria')&&h.includes('saldo');
+              });
+            }
+            function setup(t){
+              let s=states.get(t);if(s)return s;
+              const bar=document.createElement('div');bar.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0';
+              const input=document.createElement('input');input.type='search';input.placeholder='Cerca concetto, categoria o importo…';input.setAttribute('aria-label','Cerca nei movimenti');input.style.cssText='flex:1;min-width:220px;max-width:440px;padding:10px;border:1px solid #bbb;border-radius:8px;font:inherit';
+              const info=document.createElement('span');info.style.cssText='font-size:.9em';
+              const prev=document.createElement('button'),next=document.createElement('button');
+              prev.type=next.type='button';prev.textContent='‹ Precedente';next.textContent='Successiva ›';
+              [prev,next].forEach(b=>b.style.cssText='padding:8px 12px;border:1px solid #bbb;border-radius:8px;background:transparent;font:inherit;cursor:pointer');
+              bar.append(input,info,prev,next);t.parentNode.insertBefore(bar,t);
+              s={bar,input,info,prev,next,page:0};states.set(t,s);
+              input.addEventListener('input',()=>{s.page=0;apply(t)});
+              prev.addEventListener('click',()=>{s.page=Math.max(0,s.page-1);apply(t)});
+              next.addEventListener('click',()=>{s.page++;apply(t)});
+              return s;
+            }
+            function apply(t){
+              if(!t.isConnected)return;const body=t.tBodies[0];if(!body)return;
+              const s=setup(t),rows=[...body.rows];rows.sort((a,b)=>dateOf(b)-dateOf(a));
+              rows.forEach((r,i)=>{if(body.rows[i]!==r)body.appendChild(r)});
+              const q=norm(s.input.value),found=rows.filter(r=>!q||norm(r.textContent).includes(q));
+              const pages=Math.max(1,Math.ceil(found.length/SIZE));s.page=Math.min(s.page,pages-1);
+              const start=s.page*SIZE,visible=new Set(found.slice(start,start+SIZE));
+              rows.forEach(r=>{r.hidden=!visible.has(r);r.style.display=visible.has(r)?'':'none'});
+              s.info.textContent=found.length?(start+1)+'–'+Math.min(start+SIZE,found.length)+' di '+found.length+' movimenti':'Nessun movimento trovato';
+              s.prev.disabled=s.page===0;s.next.disabled=s.page>=pages-1;
+              [s.prev,s.next].forEach(b=>{b.style.opacity=b.disabled?'.45':'1';b.style.cursor=b.disabled?'default':'pointer'});
+            }
+            function refresh(){const t=findTable();if(t)apply(t)}
+            function start(){refresh();new MutationObserver(()=>refresh()).observe(document.body,{childList:true,subtree:true})}
+            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+          })();
+          </script>"""
+          if 'Cerca nei movimenti' not in html:
+              if '</body>' not in html:
+                  raise SystemExit("Tag body non trovato per i controlli archivio")
+              html = html.replace('</body>', archive_script + '\n</body>', 1)
+          security_script = r"""<script>
+          (() => {
+            const KEY = 'bilancioCasa.pin.v1';
+            const style = document.createElement('style');
+            style.textContent = '#appSecurityOverlay{position:fixed;inset:0;z-index:2147483647;background:#f5f6f8;color:#18202a;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}#appSecurityOverlay *{box-sizing:border-box}#appSecurityOverlay .security-card{width:100%;max-width:360px;background:#fff;border:1px solid #d9dee5;border-radius:18px;padding:26px;box-shadow:0 12px 36px rgba(0,0,0,.16)}#appSecurityOverlay h1{font-size:1.45rem;margin:0 0 8px}#appSecurityOverlay p{line-height:1.45;margin:0 0 18px;color:#4b5563}#appSecurityOverlay input{display:block;width:100%;font-size:1.4rem;letter-spacing:.35em;text-align:center;padding:12px;border:1px solid #aab3bf;border-radius:10px;margin:12px 0}#appSecurityOverlay button{width:100%;padding:12px;border:0;border-radius:10px;background:#1e40af;color:white;font-size:1rem;font-weight:600}#appSecurityOverlay .security-error{min-height:1.4em;color:#b42318;font-size:.9rem;margin-top:10px}';
+            document.head.appendChild(style);
+            const overlay = document.createElement('div');
+            overlay.id = 'appSecurityOverlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.innerHTML = '<div class="security-card"><h1>Bilancio Casa</h1><p id="securityMessage"></p><form id="securityForm"><input id="securityPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" minlength="6" autocomplete="off" aria-label="PIN di 6 cifre" required><button id="securitySubmit" type="submit"></button><div id="securityError" class="security-error" role="status" aria-live="polite"></div></form></div>';
+            document.body.appendChild(overlay);
+            const $ = id => document.getElementById(id);
+            let stage = 'unlock', firstPin = '', unlocked = false, busy = false, failures = 0;
+            const stored = () => localStorage.getItem(KEY);
+            function render() {
+              const hasPin = !!stored();
+              stage = hasPin ? 'unlock' : (firstPin ? 'confirm' : 'create');
+              $('securityMessage').textContent = stage === 'create' ? 'Per proteggere i dati su questo dispositivo, crea un PIN di 6 cifre.' : stage === 'confirm' ? 'Inserisci di nuovo il PIN per confermarlo.' : 'Inserisci il PIN per visualizzare il bilancio.';
+              $('securitySubmit').textContent = stage === 'unlock' ? 'Sblocca' : stage === 'confirm' ? 'Conferma PIN' : 'Crea PIN';
+              $('securityPin').value = '';
+              $('securityPin').setAttribute('aria-label', stage === 'unlock' ? 'PIN di sblocco' : 'Crea PIN di 6 cifre');
+              $('securityError').textContent = '';
+              setTimeout(() => $('securityPin').focus(), 80);
+            }
+            async function hashPin(pin, salt) {
+              const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+              const bits = await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'}, material, 256);
+              return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
+            }
+            function fromHex(hex) { return new Uint8Array(hex.match(/.{2}/g).map(x=>parseInt(x,16))); }
+            function toHex(bytes) { return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join(''); }
+            function lock() {
+              unlocked = false;
+              overlay.style.display = 'flex';
+              $('securityPin').value = '';
+              if (stored()) { stage = 'unlock'; $('securityMessage').textContent = 'Inserisci il PIN per visualizzare il bilancio.'; $('securitySubmit').textContent = 'Sblocca'; }
+            }
+            $('securityForm').addEventListener('submit', async event => {
+              event.preventDefault();
+              if (busy) return;
+              const pin = $('securityPin').value;
+              if (!/^\d{6}$/.test(pin)) { $('securityError').textContent = 'Il PIN deve contenere esattamente 6 cifre.'; return; }
+              busy = true; $('securitySubmit').disabled = true;
+              try {
+                if (stage === 'create') {
+                  firstPin = pin; stage = 'confirm'; render();
+                } else if (stage === 'confirm') {
+                  if (pin !== firstPin) { firstPin = ''; stage = 'create'; $('securityError').textContent = 'I PIN non coincidono. Ricomincia.'; $('securityMessage').textContent = 'Scegli un PIN di 6 cifre.'; $('securitySubmit').textContent = 'Crea PIN'; $('securityPin').value = ''; return; }
+                  const salt = crypto.getRandomValues(new Uint8Array(16));
+                  const hash = await hashPin(pin, salt);
+                  localStorage.setItem(KEY, toHex(salt) + ':' + hash);
+                  firstPin = ''; unlock();
+                } else {
+                  const parts = (stored() || '').split(':');
+                  if (parts.length !== 2) { localStorage.removeItem(KEY); firstPin = ''; render(); return; }
+                  const hash = await hashPin(pin, fromHex(parts[0]));
+                  if (hash !== parts[1]) { failures++; $('securityError').textContent = failures >= 5 ? 'Troppi tentativi. Attendi 15 secondi.' : 'PIN non corretto.'; $('securityPin').value = ''; if (failures >= 5) { $('securitySubmit').disabled = true; setTimeout(() => { failures = 0; $('securitySubmit').disabled = false; $('securityError').textContent = ''; $('securityPin').focus(); }, 15000); } return; }
+                  failures = 0; unlock();
+                }
+              } catch (e) {
+                $('securityError').textContent = 'Protezione non disponibile in questo browser. Ricarica l’app e riprova.';
+              } finally {
+                busy = false;
+                if (failures < 5) $('securitySubmit').disabled = false;
+              }
+            });
+            function unlock() { unlocked = true; overlay.style.display = 'none'; $('securityPin').value = ''; }
+            // Dopo un'uscita volontaria, al prossimo avvio chiedi le credenziali dell'account,
+            // non anche il PIN locale. Il PIN resta attivo per le normali riaperture.
+            const LOGOUT_BYPASS_KEY = 'bilancioCasa.skipPinAfterLogout.v1';
+            document.addEventListener('click', event => {
+              const target = event.target && event.target.closest ? event.target.closest('button, a, [role="button"]') : null;
+              if (!target) return;
+              const label = (target.innerText || target.textContent || '').trim().toLocaleLowerCase();
+              if (label === 'esci' || label === 'logout' || label === 'sign out') {
+                try { localStorage.setItem(LOGOUT_BYPASS_KEY, '1'); } catch (_) {}
+              }
+            }, true);
+            let skipPinOnce = false;
+            try {
+              skipPinOnce = localStorage.getItem(LOGOUT_BYPASS_KEY) === '1';
+              if (skipPinOnce) localStorage.removeItem(LOGOUT_BYPASS_KEY);
+            } catch (_) {}
+            if (skipPinOnce) {
+              unlocked = true;
+              overlay.style.display = 'none';
+            }
+            // Sul PC un semplice cambio di scheda non deve richiedere di nuovo il PIN.
+            // Sui telefoni manteniamo il blocco quando l'app passa in secondo piano.
+            const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+            if (isPhone) {
+              document.addEventListener('visibilitychange', () => { if (document.hidden && stored()) lock(); });
+              window.addEventListener('pagehide', () => { if (stored()) lock(); });
+            }
+            render();
+          })();
+          </script>"""
+          if 'id="appSecurityOverlay"' not in html:
+              html = html.replace('</body>', security_script + '\n</body>', 1)
+          html = html.replace('versione 0.2.5 · sincronizzazione cloud protetta', 'versione 0.2.8 · sincronizzazione cloud protetta')
+          old_backup_panel = '<h3>Backup dei dati</h3>'
+          panel_start = html.find(old_backup_panel)
+          if panel_start < 0:
+              raise SystemExit("Pannello backup non trovato nel pacchetto originale")
+          panel_end = html.find('</article>', panel_start)
+          if panel_end < 0:
+              raise SystemExit("Fine pannello backup non trovata")
+          new_backup_panel = """<h3>Backup dei dati</h3>
+          <p>Scarica un backup completo in formato JSON: include movimenti, impostazioni del conto e storico delle quote giornaliere.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0">
+            <button id="backupCreateBtn" class="button button-primary" type="button">Scarica backup completo</button>
+            <button id="backupRestoreBtn" class="button button-soft" type="button">Ripristina backup</button>
+            <input id="backupRestoreFile" type="file" accept=".json,application/json" hidden>
+          </div>
+          <p class="small-note">Il ripristino aggiorna i movimenti con lo stesso identificativo e le impostazioni/quote corrispondenti; non cancella gli altri movimenti. Conserva il file in un luogo sicuro e non caricarlo su GitHub.</p>
+          """
+          html = html[:panel_start] + new_backup_panel + html[panel_end:]
+
+          html_path.write_text(html, encoding="utf-8")
+
+          sw_path = root / "service-worker.js"
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.9", "bilancio-casa-shell-v0.2.11")
+          sw_path.write_text(sw, encoding="utf-8")
+          PY
+          cp -a extracted/bilancio-casa-pwa/. public/
+
+      - name: Prepara il sito
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
 
-      - name: Pubblica sito preservato con anteprima separata
+      - name: Pubblica
         id: deployment
         uses: actions/deploy-pages@v4
