@@ -158,9 +158,9 @@ replace_once(
             </label>
             <div class="form-actions"><button id="saveCashBalanceBtn" type="button">Salva saldo contanti</button></div>
           </div>
-          <div class="summary-grid" style="margin-top:.75rem">
-            <div><span class="small-note">Prelievi nel mese selezionato</span><strong id="cashMonthWithdrawals">—</strong></div>
-            <div><span class="small-note">Prelievi complessivi registrati</span><strong id="cashTotalWithdrawals">—</strong></div>
+          <div class="summary-grid" style="margin-top:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem">
+            <div style="display:flex;flex-direction:column;align-items:flex-start;gap:.4rem;min-width:0"><span class="small-note">Prelievi nel mese selezionato</span><strong id="cashMonthWithdrawals" style="display:block;margin-top:.15rem">—</strong></div>
+            <div style="display:flex;flex-direction:column;align-items:flex-start;gap:.4rem;min-width:0"><span class="small-note">Prelievi complessivi registrati</span><strong id="cashTotalWithdrawals" style="display:block;margin-top:.15rem">—</strong></div>
           </div>
           <p id="cashSyncStatus" class="small-note">Caricamento del saldo contanti…</p>
         </section>`);
