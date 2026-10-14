@@ -470,10 +470,58 @@ jobs:
           """
           html = html[:panel_start] + new_backup_panel + html[panel_end:]
 
+          # Sul PC, uniforma le etichette mese visualizzate come YYYY-MM (es. 2026-10)
+          # al formato italiano "ottobre 2026". Non modifica input o dati salvati.
+          desktop_month_script = r"""<script>
+          (() => {
+            const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+              (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+            if (isPhone) return;
+            const formatMonth = value => {
+              const match = /^(\\d{4})-(0[1-9]|1[0-2])$/.exec(value.trim());
+              if (!match) return null;
+              const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+              return new Intl.DateTimeFormat('it-IT', {
+                month: 'long', year: 'numeric', timeZone: 'UTC'
+              }).format(date);
+            };
+            const scan = root => {
+              if (!root) return;
+              const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+              const nodes = [];
+              while (walker.nextNode()) nodes.push(walker.currentNode);
+              for (const node of nodes) {
+                const parent = node.parentElement;
+                if (!parent || /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT)$/i.test(parent.tagName)) continue;
+                const formatted = formatMonth(node.nodeValue || '');
+                if (formatted) node.nodeValue = formatted;
+              }
+            };
+            const start = () => {
+              scan(document.body);
+              new MutationObserver(records => {
+                for (const record of records) {
+                  if (record.type === 'characterData') scan(record.target.parentElement);
+                  for (const added of record.addedNodes || []) {
+                    if (added.nodeType === Node.TEXT_NODE) {
+                      const formatted = formatMonth(added.nodeValue || '');
+                      if (formatted && added.parentElement) added.nodeValue = formatted;
+                    } else if (added.nodeType === Node.ELEMENT_NODE) scan(added);
+                  }
+                }
+              }).observe(document.body, { childList: true, subtree: true, characterData: true });
+            };
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+            else start();
+          })();
+          </script>"""
+          if 'desktop-month-format-fix' not in html:
+              html = html.replace('</body>', desktop_month_script.replace('<script>', '<script id="desktop-month-format-fix">') + '\\n</body>', 1)
+
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.9", "bilancio-casa-shell-v0.2.11")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.9", "bilancio-casa-shell-v0.2.12")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
