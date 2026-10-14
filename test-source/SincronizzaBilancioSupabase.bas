@@ -20,6 +20,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     Dim oldCalc As XlCalculation, oldEvents As Boolean, oldScreen As Boolean
     Dim lo As ListObject, targetTable As ListObject, newRow As ListRow
     Dim data As Object, tmpWb As Workbook, tmpWs As Worksheet
+    Dim excelChanged As Boolean, remoteChanged As Boolean, snapVals As Variant
     Dim tempPath As String, stm As Object, httpStatus As Long
     Dim errText As String
 
@@ -136,23 +137,41 @@ Public Sub SincronizzaBilancioCasaDiretto()
         End If
     Else
         For r = headerRow + 1 To ws.Cells(ws.Rows.Count, idCol).End(xlUp).Row
-            id = Trim$(CStr(ws.Cells(r, idCol).Value)): If Len(id) > 0 Then If Not rowById.Exists(id) Then rowById.Add id, r
-        Next r
-    End If
-
-    ' Protezione anti-perdita: senza snapshot non si può decidere quale copia sia più recente.
-    ' Se Excel e database differiscono su un ID già esistente, interrompe PRIMA di sovrascrivere Excel.
+            id = Trim$(CStr(ws.Cells(r, idCol).Value)): If Len(id) > 0 Th    ' Confronta le due copie con l'ultimo snapshot riuscito.
     For Each k In rowById.Keys
         id = CStr(k)
         If apiRows.Exists(id) Then
             If Not newIds.Exists(id) Then
                 r = CLng(rowById(id)): ar = CLng(apiRows(id))
-                If Not ExcelRowMatchesRemote(ws, r, hdr, tmpWs, ar, apiHdr) Then
-                    Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Excel e app contengono dati diversi. Nessuna delle due versioni è stata sovrascritta; serve il confronto con lo snapshot."
+                If snapshot.Exists(id) Then
+                    snapVals = snapshot(id)
+                    excelChanged = Not ExcelRowMatchesSnapshot(ws, r, hdr, snapVals)
+                    remoteChanged = Not RemoteRowMatchesSnapshot(tmpWs, ar, apiHdr, snapVals)
+                    If excelChanged And remoteChanged Then
+                        If Not ExcelRowMatchesRemote(ws, r, hdr, tmpWs, ar, apiHdr) Then
+                            Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Excel e app sono stati modificati in modo diverso dopo l'ultima sincronizzazione. Nessuna versione è stata sovrascritta."
+                        End If
+                    ElseIf excelChanged And Not remoteChanged Then
+                        If Not PatchMovementFromExcel(ws, r, hdr, id, userId, token, httpStatus, response) Then
+                            Err.Raise vbObjectError + 714, , "Aggiornamento Excel -> app non riuscito per ID " & id & " (HTTP " & httpStatus & "): " & Left$(response, 250)
+                        End If
+                        tmpWs.Cells(ar, apiHdr("movement_date")).Value = Format$(CDate(ws.Cells(r, hdr("data")).Value), "yyyy-mm-dd")
+                        tmpWs.Cells(ar, apiHdr("concept")).Value = ws.Cells(r, hdr("concetto")).Value
+                        tmpWs.Cells(ar, apiHdr("category")).Value = ws.Cells(r, hdr("categoria")).Value
+                        tmpWs.Cells(ar, apiHdr("movement_type")).Value = ws.Cells(r, hdr("tipo")).Value
+                        tmpWs.Cells(ar, apiHdr("amount")).Value = CDbl(ws.Cells(r, hdr("importo")).Value)
+                        tmpWs.Cells(ar, apiHdr("notes")).Value = IIf(hdr.Exists("note"), ws.Cells(r, hdr("note")).Value, "")
+                    End If
+                ElseIf Not ExcelRowMatchesRemote(ws, r, hdr, tmpWs, ar, apiHdr) Then
+                    Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Non esiste ancora uno snapshot affidabile e Excel e app contengono dati diversi. Nessuna versione è stata sovrascritta."
                 End If
             End If
         ElseIf Not newIds.Exists(id) Then
             Err.Raise vbObjectError + 713, , "L'ID " & id & " presente in Excel non risulta nel database. Sincronizzazione interrotta per evitare perdita di dati."
+        End If
+    Next k
+
+nizzazione interrotta per evitare perdita di dati."
         End If
     Next k
 
