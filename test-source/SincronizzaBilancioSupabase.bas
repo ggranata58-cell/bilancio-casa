@@ -286,9 +286,10 @@ Private Function HttpRequest(ByVal method As String, ByVal url As String, ByVal 
 End Function
 
 Private Function JsonString(ByVal s As String) As String
-    s = Replace(s, """", "\""")
-    s = Replace(s, vbCr, "\r"): s = Replace(s, vbLf, "\n"): s = Replace(s, vbTab, "\t")
-    JsonString = """" & s & """"
+    s = Replace(s, Chr$(92), Chr$(92) & Chr$(92))
+    s = Replace(s, Chr$(34), Chr$(92) & Chr$(34))
+    s = Replace(s, vbCr, Chr$(92) & "r"): s = Replace(s, vbLf, Chr$(92) & "n"): s = Replace(s, vbTab, Chr$(92) & "t")
+    JsonString = Chr$(34) & s & Chr$(34)
 End Function
 
 Private Function JsonGetString(ByVal json As String, ByVal key As String) As String
