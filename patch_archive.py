@@ -117,7 +117,7 @@ replace_once(
 "return excluded total")
 replace_once(
 "    for (const m of rows) {\n      if (m.category === SPECIAL_CATEGORY) {\n        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));\n      } else if (m.movement_type === 'Uscita') {\n        totals.set(m.category, (totals.get(m.category) || 0) + m.amount);\n      }\n    }",
-"    for (const m of rows) {\n      if (isExcludedMovement(m)) {\n        const label = 'Movimenti esclusi';\n        totals.set(label, (totals.get(label) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));\n      } else if (m.movement_type === 'Uscita') {\n        totals.set(m.category, (totals.get(m.category) || 0) + m.amount);\n      }\n    }",
+"    for (const m of rows) {\n      if (isExcludedMovement(m)) {\n        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));\n      } else if (m.category === SPECIAL_CATEGORY) {\n        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));\n      } else if (m.movement_type === 'Uscita') {\n        totals.set(m.category, (totals.get(m.category) || 0) + m.amount);\n      }\n    }",
 "separate category totals")
 replace_once(
 "    $('statExpenses').textContent = money(s.expenses);",
