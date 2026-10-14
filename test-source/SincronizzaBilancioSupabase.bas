@@ -138,15 +138,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
                             Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Excel e app sono stati modificati in modo diverso dopo l'ultima sincronizzazione. Nessuna delle due versioni è stata sovrascritta."
                         End If
                     ElseIf excelChanged And Not remoteChanged Then
-                        If Not PatchMovementFromExcel(ws, r, hdr, id, userId, token, httpStatus, response) Then
-                            Err.Raise vbObjectError + 714, , "Aggiornamento Excel -> app non riuscito per ID " & id & " (HTTP " & httpStatus & "): " & Left$(response, 250)
-                        End If
-                        tmpWs.Cells(ar, apiHdr("movement_date")).Value = Format$(CDate(ws.Cells(r, hdr("data")).Value), "yyyy-mm-dd")
-                        tmpWs.Cells(ar, apiHdr("concept")).Value = ws.Cells(r, hdr("concetto")).Value
-                        tmpWs.Cells(ar, apiHdr("category")).Value = ws.Cells(r, hdr("categoria")).Value
-                        tmpWs.Cells(ar, apiHdr("movement_type")).Value = ws.Cells(r, hdr("tipo")).Value
-                        tmpWs.Cells(ar, apiHdr("amount")).Value = CDbl(ws.Cells(r, hdr("importo")).Value)
-                        tmpWs.Cells(ar, apiHdr("notes")).Value = IIf(hdr.Exists("note"), ws.Cells(r, hdr("note")).Value, "")
+                        ' Aggiornamento differito: prima si controllano tutti i conflitti.
                     End If
                 ElseIf Not ExcelRowMatchesRemote(ws, r, hdr, tmpWs, ar, apiHdr) Then
                     Err.Raise vbObjectError + 712, , "Conflitto sul movimento ID " & id & ". Non esiste ancora uno snapshot affidabile e Excel e app contengono dati diversi. Nessuna delle due versioni è stata sovrascritta."
@@ -154,6 +146,30 @@ Public Sub SincronizzaBilancioCasaDiretto()
             End If
         ElseIf Not newIds.Exists(id) Then
             Err.Raise vbObjectError + 713, , "L'ID " & id & " presente in Excel non risulta nel database. Sincronizzazione interrotta per evitare perdita di dati."
+        End If
+    Next k
+
+    ' Seconda fase: applica le modifiche Excel solo dopo che tutti i conflitti sono stati esclusi.
+    For Each k In rowById.Keys
+        id = CStr(k)
+        If apiRows.Exists(id) And snapshot.Exists(id) Then
+            If Not newIds.Exists(id) Then
+                r = CLng(rowById(id)): ar = CLng(apiRows(id))
+                snapVals = snapshot(id)
+                excelChanged = Not ExcelRowMatchesSnapshot(ws, r, hdr, snapVals)
+                remoteChanged = Not RemoteRowMatchesSnapshot(tmpWs, ar, apiHdr, snapVals)
+                If excelChanged And Not remoteChanged Then
+                    If Not PatchMovementFromExcel(ws, r, hdr, id, userId, token, httpStatus, response) Then
+                        Err.Raise vbObjectError + 714, , "Aggiornamento Excel -> app non riuscito per ID " & id & " (HTTP " & httpStatus & "): " & Left$(response, 250)
+                    End If
+                    tmpWs.Cells(ar, apiHdr("movement_date")).Value = Format$(CDate(ws.Cells(r, hdr("data")).Value), "yyyy-mm-dd")
+                    tmpWs.Cells(ar, apiHdr("concept")).Value = ws.Cells(r, hdr("concetto")).Value
+                    tmpWs.Cells(ar, apiHdr("category")).Value = ws.Cells(r, hdr("categoria")).Value
+                    tmpWs.Cells(ar, apiHdr("movement_type")).Value = ws.Cells(r, hdr("tipo")).Value
+                    tmpWs.Cells(ar, apiHdr("amount")).Value = CDbl(ws.Cells(r, hdr("importo")).Value)
+                    tmpWs.Cells(ar, apiHdr("notes")).Value = IIf(hdr.Exists("note"), ws.Cells(r, hdr("note")).Value, "")
+                End If
+            End If
         End If
     Next k
 
