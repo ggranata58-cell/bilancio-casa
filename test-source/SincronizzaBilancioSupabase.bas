@@ -68,7 +68,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     If Not targetTable Is Nothing Then
         If targetTable.DataBodyRange Is Nothing Then lastRow = headerRow Else lastRow = targetTable.DataBodyRange.Row + targetTable.DataBodyRange.Rows.Count - 1
     Else
-        lastRow = ws.Cells(ws.Rows.Count, idCol).End(xlUp).Row
+        lastRow = Application.Max(ws.Cells(ws.Rows.Count, idCol).End(xlUp).Row, ws.Cells(ws.Rows.Count, hdr("concetto")).End(xlUp).Row)
     End If
 
     ' Prima scarica il database: non inviare righe Excel con ID esistente senza confronto con uno snapshot.
@@ -179,7 +179,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
                     tmpWs.Cells(ar, apiHdr("category")).Value = ws.Cells(r, hdr("categoria")).Value
                     tmpWs.Cells(ar, apiHdr("movement_type")).Value = ws.Cells(r, hdr("tipo")).Value
                     tmpWs.Cells(ar, apiHdr("amount")).Value = CDbl(ws.Cells(r, hdr("importo")).Value)
-                    tmpWs.Cells(ar, apiHdr("notes")).Value = IIf(hdr.Exists("note"), ws.Cells(r, hdr("note")).Value, "")
+                    tmpWs.Cells(ar, apiHdr("notes")).Value = OptionalCellText(ws, r, hdr, "note")
                 End If
             End If
         End If
@@ -197,7 +197,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
                     ",""category"":" & JsonString(CStr(ws.Cells(r, hdr("categoria")).Value)) & _
                     ",""movement_type"":" & JsonString(Trim$(CStr(ws.Cells(r, hdr("tipo")).Value))) & _
                     ",""amount"":" & Replace(Format$(CDbl(ws.Cells(r, hdr("importo")).Value), "0.00"), ",", ".") & _
-                    ",""notes"":" & JsonString(IIf(hdr.Exists("note"), CStr(ws.Cells(r, hdr("note")).Value), "")) & "}"
+                    ",""notes"":" & JsonString(OptionalCellText(ws, r, hdr, "note")) & "}"
                 response = HttpRequest("POST", SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?select=id", body, "application/json", token, httpStatus, "return=representation")
                 If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 708, , "Errore inserendo la riga " & r & " (HTTP " & httpStatus & "): " & Left$(response, 300)
                 id = JsonGetString(response, "id")
@@ -213,7 +213,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
                 tmpWs.Cells(ar, apiHdr("category")).Value = ws.Cells(r, hdr("categoria")).Value
                 tmpWs.Cells(ar, apiHdr("movement_type")).Value = ws.Cells(r, hdr("tipo")).Value
                 tmpWs.Cells(ar, apiHdr("amount")).Value = CDbl(ws.Cells(r, hdr("importo")).Value)
-                tmpWs.Cells(ar, apiHdr("notes")).Value = IIf(hdr.Exists("note"), ws.Cells(r, hdr("note")).Value, "")
+                tmpWs.Cells(ar, apiHdr("notes")).Value = OptionalCellText(ws, r, hdr, "note")
                 apiRows(id) = ar
                 sent = sent + 1
             End If
@@ -350,6 +350,16 @@ Private Sub PutValue(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal hdr As O
     If hdr.Exists(key) Then ws.Cells(rowNum, hdr(key)).Value = value
 End Sub
 
+Private Function OptionalCellText(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal hdr As Object, ByVal key As String) As String
+    If hdr.Exists(key) Then
+        If Not IsError(ws.Cells(rowNum, hdr(key)).Value) Then
+            OptionalCellText = CStr(ws.Cells(rowNum, hdr(key)).Value)
+        End If
+    Else
+        OptionalCellText = ""
+    End If
+End Function
+
 Private Function ExcelRowMatchesRemote(ByVal ws As Worksheet, ByVal excelRow As Long, ByVal hdr As Object, _
     ByVal remoteWs As Worksheet, ByVal remoteRow As Long, ByVal apiHdr As Object) As Boolean
     On Error GoTo NotMatch
@@ -442,7 +452,7 @@ Private Sub SaveSyncSnapshot(ByVal snapWs As Worksheet, ByVal ws As Worksheet, B
         snapWs.Cells(dest, 4).Value = ws.Cells(r, hdr("categoria")).Value
         snapWs.Cells(dest, 5).Value = ws.Cells(r, hdr("tipo")).Value
         snapWs.Cells(dest, 6).Value = CDbl(ws.Cells(r, hdr("importo")).Value)
-        snapWs.Cells(dest, 7).Value = IIf(hdr.Exists("note"), ws.Cells(r, hdr("note")).Value, "")
+        snapWs.Cells(dest, 7).Value = OptionalCellText(ws, r, hdr, "note")
         dest = dest + 1
     Next k
     snapWs.Visible = xlSheetVeryHidden
@@ -486,7 +496,7 @@ Private Function PatchMovementFromExcel(ByVal ws As Worksheet, ByVal excelRow As
         ",""category"":" & JsonString(CStr(ws.Cells(excelRow, hdr("categoria")).Value)) & _
         ",""movement_type"":" & JsonString(CStr(ws.Cells(excelRow, hdr("tipo")).Value)) & _
         ",""amount"":" & Replace(Format$(CDbl(ws.Cells(excelRow, hdr("importo")).Value), "0.00"), ",", ".") & _
-        ",""notes"":" & JsonString(IIf(hdr.Exists("note"), CStr(ws.Cells(excelRow, hdr("note")).Value), "")) & "}"
+        ",""notes"":" & JsonString(OptionalCellText(ws, excelRow, hdr, "note")) & "}"
     url = SUPABASE_URL & "/rest/v1/" & TABLE_NAME & "?id=eq." & id & "&user_id=eq." & userId
     response = HttpRequest("PATCH", url, body, "application/json", token, status, "return=representation")
     If status < 200 Or status >= 300 Then
