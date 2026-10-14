@@ -329,3 +329,25 @@ Private Function GetOrCreateSyncSheet(ByVal wb As Workbook) As Worksheet
     End If
 End Function
 
+
+Private Function LoadSyncSnapshot(ByVal snapWs As Worksheet) As Object
+    Dim d As Object, last As Long, r As Long, id As String
+    Dim vals(1 To 6) As Variant
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    last = snapWs.Cells(snapWs.Rows.Count, 1).End(xlUp).Row
+    For r = 2 To last
+        id = Trim$(CStr(snapWs.Cells(r, 1).Value))
+        If Len(id) > 0 Then
+            vals(1) = snapWs.Cells(r, 2).Value
+            vals(2) = snapWs.Cells(r, 3).Value
+            vals(3) = snapWs.Cells(r, 4).Value
+            vals(4) = snapWs.Cells(r, 5).Value
+            vals(5) = snapWs.Cells(r, 6).Value
+            vals(6) = snapWs.Cells(r, 7).Value
+            d(id) = vals
+        End If
+    Next r
+    Set LoadSyncSnapshot = d
+End Function
+
