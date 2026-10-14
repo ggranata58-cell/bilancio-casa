@@ -2,15 +2,18 @@ Attribute VB_Name = "AggiornaMovimentiDaApp"
 Option Explicit
 
 ' Importa il CSV esportato da Bilancio Casa nel foglio Movimenti.
-' Aggiorna le righe esistenti usando ID movimento e aggiunge solo gli ID nuovi.
-' Non elimina righe Excel assenti dal CSV e ignora righe senza ID (es. saldo iniziale).
+' Cerca le intestazioni nel foglio Excel (anche alla riga 4).
+' Aggiorna per ID stabile, aggiunge nuovi ID e non elimina righe.
 Public Sub AggiornaMovimentiDaApp()
     Dim target As Worksheet, srcWb As Workbook, src As Worksheet
     Dim filePath As Variant, lastSrc As Long, lastTgt As Long
     Dim srcHeaders As Object, tgtHeaders As Object, idRows As Object
     Dim c As Long, r As Long, destRow As Long, idColSrc As Long, idColTgt As Long
+    Dim srcHeaderRow As Long, tgtHeaderRow As Long
     Dim header As String, movementId As String, updated As Long, added As Long
-    Dim key As Variant, targetRow As Long, oldCalc As XlCalculation
+    Dim key As Variant, oldCalc As XlCalculation
+    Dim lo As ListObject, targetTable As ListObject, newListRow As ListRow
+    Dim numeroErrore As Long, descrizioneErrore As String
 
     On Error GoTo Fail
     Set target = ThisWorkbook.Worksheets("Movimenti")
@@ -27,6 +30,7 @@ Public Sub AggiornaMovimentiDaApp()
         Local:=True
     Set srcWb = ActiveWorkbook
     Set src = srcWb.Worksheets(1)
+    srcHeaderRow = 1
 
     Set srcHeaders = CreateObject("Scripting.Dictionary")
     Set tgtHeaders = CreateObject("Scripting.Dictionary")
@@ -35,50 +39,98 @@ Public Sub AggiornaMovimentiDaApp()
     tgtHeaders.CompareMode = vbTextCompare
     idRows.CompareMode = vbTextCompare
 
-    For c = 1 To src.Cells(1, src.Columns.Count).End(xlToLeft).Column
-        header = NormalizzaIntestazione(CStr(src.Cells(1, c).Value))
+    For c = 1 To src.Cells(srcHeaderRow, src.Columns.Count).End(xlToLeft).Column
+        header = NormalizzaIntestazione(CStr(src.Cells(srcHeaderRow, c).Value))
         If Len(header) > 0 Then srcHeaders(header) = c
     Next c
-    For c = 1 To target.Cells(1, target.Columns.Count).End(xlToLeft).Column
-        header = NormalizzaIntestazione(CStr(target.Cells(1, c).Value))
+
+    ' Prima cerca la tabella Excel: le intestazioni possono essere alla riga 4.
+    tgtHeaderRow = 0
+    For Each lo In target.ListObjects
+        For c = 1 To lo.ListColumns.Count
+            header = NormalizzaIntestazione(CStr(lo.HeaderRowRange.Cells(1, c).Value))
+            If header = "idmovimento" Then
+                Set targetTable = lo
+                tgtHeaderRow = lo.HeaderRowRange.Row
+                Exit For
+            End If
+        Next c
+        If tgtHeaderRow > 0 Then Exit For
+    Next lo
+
+    ' Se il foglio non usa una tabella Excel, cerca l'intestazione nelle prime 20 righe.
+    If tgtHeaderRow = 0 Then
+        For r = 1 To 20
+            For c = 1 To target.Cells(r, target.Columns.Count).End(xlToLeft).Column
+                If NormalizzaIntestazione(CStr(target.Cells(r, c).Value)) = "idmovimento" Then
+                    tgtHeaderRow = r
+                    Exit For
+                End If
+            Next c
+            If tgtHeaderRow > 0 Then Exit For
+        Next r
+    End If
+
+    If tgtHeaderRow = 0 Then
+        Err.Raise vbObjectError + 201, , "Non trovo l'intestazione ID movimento nel foglio Movimenti nelle prime 20 righe."
+    End If
+
+    For c = 1 To target.Cells(tgtHeaderRow, target.Columns.Count).End(xlToLeft).Column
+        header = NormalizzaIntestazione(CStr(target.Cells(tgtHeaderRow, c).Value))
         If Len(header) > 0 Then tgtHeaders(header) = c
     Next c
 
-    If Not srcHeaders.Exists("idmovimento") Or Not tgtHeaders.Exists("idmovimento") Then
-        Err.Raise vbObjectError + 201, , "Manca l'intestazione 'ID movimento' nel CSV o nel foglio Movimenti."
+    If Not srcHeaders.Exists("idmovimento") Then
+        Err.Raise vbObjectError + 202, , "ID movimento non riconosciuto nel CSV. Controllare la prima riga delle intestazioni."
+    End If
+    If Not tgtHeaders.Exists("idmovimento") Then
+        Err.Raise vbObjectError + 203, , "ID movimento non riconosciuto nel foglio Excel."
     End If
     If Not srcHeaders.Exists("data") Or Not srcHeaders.Exists("concetto") Or _
        Not srcHeaders.Exists("tipo") Or Not srcHeaders.Exists("importo") Then
-        Err.Raise vbObjectError + 202, , "Il CSV non contiene tutte le colonne obbligatorie."
+        Err.Raise vbObjectError + 204, , "Il CSV non contiene tutte le colonne obbligatorie."
     End If
 
     idColSrc = srcHeaders("idmovimento")
     idColTgt = tgtHeaders("idmovimento")
     lastSrc = src.Cells(src.Rows.Count, idColSrc).End(xlUp).Row
-    lastTgt = target.Cells(target.Rows.Count, idColTgt).End(xlUp).Row
+    If Not targetTable Is Nothing Then
+        If targetTable.DataBodyRange Is Nothing Then
+            lastTgt = tgtHeaderRow
+        Else
+            lastTgt = targetTable.DataBodyRange.Row + targetTable.DataBodyRange.Rows.Count - 1
+        End If
+    Else
+        lastTgt = target.Cells(target.Rows.Count, idColTgt).End(xlUp).Row
+        If lastTgt < tgtHeaderRow Then lastTgt = tgtHeaderRow
+    End If
 
-    For r = 2 To lastTgt
+    For r = tgtHeaderRow + 1 To lastTgt
         movementId = Trim$(CStr(target.Cells(r, idColTgt).Value))
         If Len(movementId) > 0 Then
             If Not idRows.Exists(movementId) Then idRows.Add movementId, r
         End If
     Next r
 
-    For r = 2 To lastSrc
+    For r = srcHeaderRow + 1 To lastSrc
         movementId = Trim$(CStr(src.Cells(r, idColSrc).Value))
         If Len(movementId) > 0 Then
             If idRows.Exists(movementId) Then
                 destRow = CLng(idRows(movementId))
                 updated = updated + 1
             Else
-                lastTgt = target.Cells(target.Rows.Count, idColTgt).End(xlUp).Row
-                destRow = lastTgt + 1
+                If Not targetTable Is Nothing Then
+                    Set newListRow = targetTable.ListRows.Add
+                    destRow = newListRow.Range.Row
+                Else
+                    lastTgt = target.Cells(target.Rows.Count, idColTgt).End(xlUp).Row
+                    If lastTgt < tgtHeaderRow Then lastTgt = tgtHeaderRow
+                    destRow = lastTgt + 1
+                End If
                 idRows.Add movementId, destRow
                 added = added + 1
             End If
 
-            ' Copia solo colonne presenti in entrambi i fogli.
-            ' La colonna Mese del CSV viene ignorata se non esiste nel foglio Excel.
             For Each key In srcHeaders.Keys
                 If tgtHeaders.Exists(CStr(key)) Then
                     target.Cells(destRow, tgtHeaders(CStr(key))).Value = src.Cells(r, srcHeaders(CStr(key))).Value
@@ -98,17 +150,21 @@ Public Sub AggiornaMovimentiDaApp()
     Exit Sub
 
 Fail:
+    numeroErrore = Err.Number
+    descrizioneErrore = Err.Description
     On Error Resume Next
     If Not srcWb Is Nothing Then srcWb.Close SaveChanges:=False
     Application.Calculation = oldCalc
     Application.EnableEvents = True
     Application.ScreenUpdating = True
-    MsgBox "Sincronizzazione interrotta: " & Err.Description, vbExclamation
+    On Error GoTo 0
+    MsgBox "Errore " & numeroErrore & ": " & descrizioneErrore, vbExclamation
 End Sub
 
 Private Function NormalizzaIntestazione(ByVal s As String) As String
-    s = LCase$(Trim$(s))
     s = Replace(s, ChrW(65279), "")
+    s = Replace(s, ChrW(160), " ")
+    s = LCase$(Trim$(s))
     s = Replace(s, " ", "")
     s = Replace(s, "+", "piu")
     s = Replace(s, "-", "")
