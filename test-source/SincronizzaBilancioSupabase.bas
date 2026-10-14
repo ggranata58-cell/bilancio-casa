@@ -237,7 +237,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     If Len(Dir$(tempPath)) > 0 Then Kill tempPath
     Application.Calculation = oldCalc: Application.EnableEvents = oldEvents: Application.ScreenUpdating = oldScreen
     MsgBox "Sincronizzazione diretta completata." & vbCrLf & _
-        "Nuovi movimenti inviati da Excel: " & sent & vbCrLf & "Nuovi ID assegnati: " & added & vbCrLf & _
+        "Nuovi movimenti inviati da Excel: " & sent & vbCrLf & "Movimenti aggiunti in Excel: " & added & vbCrLf & _
         "Movimenti ricevuti dal database: " & downloaded & vbCrLf & _
         "Nessun movimento è stato cancellato." & vbCrLf & _
         "Le modifiche univoche sono state riconciliate; in caso di conflitto la macro si ferma senza sovrascrivere le versioni diverse.", vbInformation
