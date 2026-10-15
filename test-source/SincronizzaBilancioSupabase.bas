@@ -335,13 +335,13 @@ Public Sub AvviaSincronizzazioneAutomatica()
 End Sub
 
 ' Arresta il timer; non modifica i dati già sincronizzati.
-Public Sub FermaSincronizzazioneAutomatica()
+Public Sub FermaSincronizzazioneAutomatica(Optional ByVal silenzioso As Boolean = False)
     gAutoSyncEnabled = False
     On Error Resume Next
     If gNextSyncTime <> 0 Then Application.OnTime EarliestTime:=gNextSyncTime, Procedure:="SincronizzazioneBilancioCasaTimer", Schedule:=False
     On Error GoTo 0
     gNextSyncTime = 0
-    MsgBox "Sincronizzazione automatica arrestata.", vbInformation
+    If Not silenzioso Then MsgBox "Sincronizzazione automatica arrestata.", vbInformation
 End Sub
 
 Public Sub SincronizzazioneBilancioCasaTimer()
