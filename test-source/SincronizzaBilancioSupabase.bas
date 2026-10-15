@@ -289,6 +289,9 @@ Public Sub SincronizzaBilancioCasaDiretto()
         End If
     Next ar
 
+    ' Ripristina la formula Giorno dopo la riconciliazione dei movimenti.
+    RipristinaFormulaGiorno ws, hdr, headerRow
+
     SaveSyncSnapshot snapshotWs, ws, hdr, rowById
     tmpWb.Close SaveChanges:=False
     If Len(Dir$(tempPath)) > 0 Then Kill tempPath
@@ -480,6 +483,59 @@ Private Function NormalizeHeader(ByVal s As String) As String
     s = Replace(s, "+", "piu"): s = Replace(s, "-", ""): s = Replace(s, "/", "")
     NormalizeHeader = s
 End Function
+
+Private Sub RipristinaFormulaGiorno(ByVal ws As Worksheet, ByVal hdr As Object, ByVal headerRow As Long)
+    Dim dayCol As Long, dateCol As Long, typeCol As Long
+    Dim firstRow As Long, lastRow As Long, r As Long
+    Dim dateOffset As Long, dateRef As String, formulaText As String
+
+    If Not hdr.Exists("giorno") Or Not hdr.Exists("data") Then Exit Sub
+
+    dayCol = CLng(hdr("giorno"))
+    dateCol = CLng(hdr("data"))
+    If hdr.Exists("tipo") Then typeCol = CLng(hdr("tipo"))
+
+    firstRow = headerRow + 1
+    If typeCol > 0 Then
+        If LCase$(Trim$(CStr(ws.Cells(firstRow, typeCol).Value))) = "saldo iniziale" Then
+            firstRow = firstRow + 1
+        End If
+    End If
+
+    If Not ws.ListObjects.Count = 0 Then
+        Dim lo As ListObject
+        For Each lo In ws.ListObjects
+            If lo.HeaderRowRange.Row = headerRow Then
+                If lo.DataBodyRange Is Nothing Then Exit Sub
+                lastRow = lo.DataBodyRange.Row + lo.DataBodyRange.Rows.Count - 1
+                Exit For
+            End If
+        Next lo
+    End If
+    If lastRow = 0 Then
+        lastRow = Application.Max(ws.Cells(ws.Rows.Count, dateCol).End(xlUp).Row, _
+                                   ws.Cells(ws.Rows.Count, hdr("concetto")).End(xlUp).Row)
+    End If
+    If lastRow < firstRow Then Exit Sub
+
+    dateOffset = dateCol - dayCol
+    If dateOffset < 0 Then
+        dateRef = "C[" & CStr(dateOffset) & "]"
+    ElseIf dateOffset > 0 Then
+        dateRef = "C[" & CStr(dateOffset) & "]"
+    Else
+        dateRef = "RC"
+    End If
+
+    formulaText = "=IF(RC" & Mid$(dateRef, 2) & "="""","""",IF(RC" & Mid$(dateRef, 2) & "<>R[-1]C" & Mid$(dateRef, 2) & ",TEXT(RC" & Mid$(dateRef, 2) & ",""dddd""),""""))"
+    For r = firstRow To lastRow
+        If Len(Trim$(CStr(ws.Cells(r, dateCol).Value))) > 0 Then
+            ws.Cells(r, dayCol).FormulaR1C1 = formulaText
+        Else
+            ws.Cells(r, dayCol).ClearContents
+        End If
+    Next r
+End Sub
 
 Private Sub PutValue(ByVal ws As Worksheet, ByVal rowNum As Long, ByVal hdr As Object, ByVal key As String, ByVal value As Variant)
     If hdr.Exists(key) Then ws.Cells(rowNum, hdr(key)).Value = value
