@@ -1,4 +1,3 @@
-Attribute VB_Name = "SincronizzaBilancioSupabase"
 Option Explicit
 
 ' Stato temporaneo: resta solo in memoria mentre Excel è aperto.
@@ -33,6 +32,8 @@ Public Sub SincronizzaBilancioCasaDiretto()
     Dim excelChanged As Boolean, remoteChanged As Boolean, snapVals As Variant
     Dim tempPath As String, stm As Object, httpStatus As Long
     Dim errText As String, wasAutoSync As Boolean, workbookWasSaved As Boolean
+    Dim movementType As String
+    Dim apiHdr As Object, apiLast As Long, apiIdCol As Long, ac As Long, ar As Long, dest As Long, k As Variant
 
     On Error GoTo Fail
     workbookWasSaved = ThisWorkbook.Saved
@@ -129,7 +130,6 @@ Public Sub SincronizzaBilancioCasaDiretto()
             If Not IsNumeric(ws.Cells(r, hdr("importo")).Value) Or CDbl(ws.Cells(r, hdr("importo")).Value) <= 0 Then
                 Err.Raise vbObjectError + 705, , "Importo non valido alla riga " & r & ". Nessuna riga verrà sincronizzata."
             End If
-            Dim movementType As String
             movementType = Trim$(CStr(ws.Cells(r, hdr("tipo")).Value))
             If movementType <> "Entrata" And movementType <> "Uscita" Then Err.Raise vbObjectError + 706, , "Tipo non valido alla riga " & r & ": usare Entrata o Uscita."
         End If
@@ -143,7 +143,6 @@ Public Sub SincronizzaBilancioCasaDiretto()
         ConsecutiveDelimiter:=False, Comma:=True, Semicolon:=False, Tab:=False, Local:=True
     Set tmpWb = ActiveWorkbook: Set tmpWs = tmpWb.Worksheets(1)
     Set apiRows = CreateObject("Scripting.Dictionary"): apiRows.CompareMode = vbTextCompare
-    Dim apiHdr As Object, apiLast As Long, apiIdCol As Long, ac As Long, ar As Long, dest As Long, k As Variant
     Set apiHdr = CreateObject("Scripting.Dictionary"): apiHdr.CompareMode = vbTextCompare
     For ac = 1 To tmpWs.Cells(1, tmpWs.Columns.Count).End(xlToLeft).Column
         apiHdr(LCase$(Trim$(CStr(tmpWs.Cells(1, ac).Value)))) = ac
@@ -322,7 +321,9 @@ Fail:
     On Error Resume Next
     password = vbNullString
     If Not tmpWb Is Nothing Then tmpWb.Close SaveChanges:=False
-    If Len(tempPath) > 0 Then If Len(Dir$(tempPath)) > 0 Then Kill tempPath
+    If Len(tempPath) > 0 Then
+        If Len(Dir$(tempPath)) > 0 Then Kill tempPath
+    End If
     If settingsSaved Then
         Application.Calculation = oldCalc
         Application.EnableEvents = oldEvents
