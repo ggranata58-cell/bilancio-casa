@@ -599,7 +599,9 @@ Private Function ExcelRowMatchesSnapshot(ByVal ws As Worksheet, ByVal excelRow A
     If CStr(ws.Cells(excelRow, hdr("categoria")).Value) <> CStr(vals(3)) Then GoTo NotMatch
     If CStr(ws.Cells(excelRow, hdr("tipo")).Value) <> CStr(vals(4)) Then GoTo NotMatch
     If Abs(CDbl(ws.Cells(excelRow, hdr("importo")).Value) - CDbl(vals(5))) > 0.005 Then GoTo NotMatch
-    If hdr.Exists("note") Then If CStr(ws.Cells(excelRow, hdr("note")).Value) <> CStr(vals(6)) Then GoTo NotMatch
+    If hdr.Exists("note") Then
+        If CStr(ws.Cells(excelRow, hdr("note")).Value) <> CStr(vals(6)) Then GoTo NotMatch
+    End If
     ExcelRowMatchesSnapshot = True
     Exit Function
 NotMatch:
@@ -623,7 +625,7 @@ End Function
 
 Private Function PatchMovementFromExcel(ByVal ws As Worksheet, ByVal excelRow As Long, ByVal hdr As Object, _
     ByVal id As String, ByVal userId As String, ByVal token As String, ByRef status As Long, ByRef response As String) As Boolean
-    Dim body As String, url As String, amountText As String
+    Dim body As String, url As String
     body = "{""movement_date"":" & JsonString(Format$(CDate(ws.Cells(excelRow, hdr("data")).Value), "yyyy-mm-dd")) & _
         ",""concept"":" & JsonString(CStr(ws.Cells(excelRow, hdr("concetto")).Value)) & _
         ",""category"":" & JsonString(CStr(ws.Cells(excelRow, hdr("categoria")).Value)) & _
