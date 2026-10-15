@@ -8,6 +8,7 @@ Private gCachedUserId As String
 Private gCachedEmail As String
 Private gAutoSyncEnabled As Boolean
 Private gSyncBusy As Boolean
+Private gTimerTriggered As Boolean
 Private gNextSyncTime As Date
 
 ' Sincronizzazione diretta Excel <-> Supabase per Bilancio Casa.
@@ -54,14 +55,17 @@ Public Sub SincronizzaBilancioCasaDiretto()
                 userId = gCachedUserId
                 gCachedAccessToken = token
             Else
+                If gTimerTriggered Then Err.Raise vbObjectError + 703, , "La sessione automatica non è più valida. Esegui una sincronizzazione manuale per accedere di nuovo."
                 gRefreshToken = vbNullString
             End If
         Else
+            If gTimerTriggered Then Err.Raise vbObjectError + 704, , "La sessione automatica è scaduta o non è rinnovabile. Esegui una sincronizzazione manuale per accedere di nuovo."
             gRefreshToken = vbNullString
         End If
     End If
 
     If Len(gRefreshToken) = 0 Then
+        If gTimerTriggered Then Err.Raise vbObjectError + 705, , "Per riprendere la sincronizzazione automatica, esegui prima una sincronizzazione manuale e accedi di nuovo."
         email = InputBox("Inserisci l'email usata per accedere a Bilancio Casa:", "Sincronizzazione diretta")
         If Len(Trim$(email)) = 0 Then GoTo Cancelled
         password = InputBox("Inserisci la password di Bilancio Casa. Non verrà salvata.", "Sincronizzazione diretta")
@@ -309,6 +313,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
 
 Cancelled:
     gSyncBusy = False
+    If gAutoSyncEnabled Then FermaSincronizzazioneAutomatica True
     Exit Sub
 
 Fail:
@@ -352,7 +357,9 @@ End Sub
 
 Public Sub SincronizzazioneBilancioCasaTimer()
     If Not gAutoSyncEnabled Or gSyncBusy Then Exit Sub
+    gTimerTriggered = True
     SincronizzaBilancioCasaDiretto
+    gTimerTriggered = False
 End Sub
 
 Private Sub PianificaProssimaSincronizzazione()
