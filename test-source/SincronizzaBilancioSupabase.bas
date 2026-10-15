@@ -419,12 +419,45 @@ Private Function JsonGetString(ByVal json As String, ByVal key As String) As Str
 End Function
 
 Private Function JsonGetObjectString(ByVal json As String, ByVal objectName As String, ByVal key As String) As String
-    Dim p As Long, q As Long, piece As String
-    p = InStr(1, json, """" & objectName & """", vbTextCompare): If p = 0 Then Exit Function
-    p = InStr(p, json, "{"): If p = 0 Then Exit Function
-    q = InStr(p, json, "}"): If q = 0 Then Exit Function
-    piece = Mid$(json, p, q - p + 1)
-    JsonGetObjectString = JsonGetString(piece, key)
+    Dim p As Long, i As Long, depth As Long
+    Dim inString As Boolean, escaped As Boolean
+    Dim ch As String, piece As String
+
+    p = InStr(1, json, """" & objectName & """", vbTextCompare)
+    If p = 0 Then Exit Function
+
+    p = InStr(p, json, "{")
+    If p = 0 Then Exit Function
+
+    For i = p To Len(json)
+        ch = Mid$(json, i, 1)
+
+        If inString Then
+            If escaped Then
+                escaped = False
+            ElseIf ch = Chr$(92) Then
+                escaped = True
+            ElseIf ch = Chr$(34) Then
+                inString = False
+            End If
+        Else
+            If ch = Chr$(34) Then
+                inString = True
+            ElseIf ch = "{" Then
+                depth = depth + 1
+            ElseIf ch = "}" Then
+                depth = depth - 1
+                If depth = 0 Then
+                    piece = Mid$(json, p, i - p + 1)
+                    Exit For
+                End If
+            End If
+        End If
+    Next i
+
+    If Len(piece) > 0 Then
+        JsonGetObjectString = JsonGetString(piece, key)
+    End If
 End Function
 
 Private Function FindHeaderRow(ByVal ws As Worksheet, ByVal wanted As String) As Long
