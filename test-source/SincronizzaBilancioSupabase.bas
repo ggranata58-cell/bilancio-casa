@@ -31,9 +31,10 @@ Public Sub SincronizzaBilancioCasaDiretto()
     Dim data As Object, tmpWb As Workbook, tmpWs As Worksheet
     Dim excelChanged As Boolean, remoteChanged As Boolean, snapVals As Variant
     Dim tempPath As String, stm As Object, httpStatus As Long
-    Dim errText As String, wasAutoSync As Boolean
+    Dim errText As String, wasAutoSync As Boolean, workbookWasSaved As Boolean
 
     On Error GoTo Fail
+    workbookWasSaved = ThisWorkbook.Saved
     Set ws = ThisWorkbook.Worksheets("Movimenti")
     Set snapshotWs = GetOrCreateSyncSheet(ThisWorkbook)
     Set snapshot = LoadSyncSnapshot(snapshotWs)
@@ -289,6 +290,11 @@ Public Sub SincronizzaBilancioCasaDiretto()
     tmpWb.Close SaveChanges:=False
     If Len(Dir$(tempPath)) > 0 Then Kill tempPath
     Application.Calculation = oldCalc: Application.EnableEvents = oldEvents: Application.ScreenUpdating = oldScreen
+
+    ' Salva automaticamente solo se il file era gia salvato prima del ciclo.
+    ' Se l'utente aveva modifiche pendenti, non le rendere permanenti senza consenso.
+    If workbookWasSaved Then ThisWorkbook.Save
+
     gSyncBusy = False
     If gAutoSyncEnabled Then
         PianificaProssimaSincronizzazione
