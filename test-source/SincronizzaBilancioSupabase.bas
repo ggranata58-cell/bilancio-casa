@@ -1,11 +1,20 @@
 Attribute VB_Name = "SincronizzaBilancioSupabase"
 Option Explicit
 
+' Stato temporaneo: resta solo in memoria mentre Excel è aperto.
+Private gRefreshToken As String
+Private gCachedAccessToken As String
+Private gCachedUserId As String
+Private gCachedEmail As String
+Private gAutoSyncEnabled As Boolean
+Private gSyncBusy As Boolean
+Private gNextSyncTime As Date
+
 ' Sincronizzazione diretta Excel <-> Supabase per Bilancio Casa.
 ' Non usa CSV esportati manualmente. Non cancella mai movimenti. (ramo di test)
 ' In assenza di snapshot, rileva i conflitti e si ferma senza sovrascrivere i dati.
 ' Richiede Excel 2013 e WinHTTP (presente in Windows).
-' La password viene richiesta ad ogni avvio e non viene salvata nel file.
+' Password non salvata; il refresh token resta solo in memoria durante la sessione Excel.
 
 Private Const SUPABASE_URL As String = "https://bstcydrgyspgofckzybl.supabase.co"
 Private Const SUPABASE_KEY As String = "sb_publishable_LURu7IVWMgryAlEq6upJKQ_wrTMfBJ6"
@@ -22,17 +31,56 @@ Public Sub SincronizzaBilancioCasaDiretto()
     Dim data As Object, tmpWb As Workbook, tmpWs As Worksheet
     Dim excelChanged As Boolean, remoteChanged As Boolean, snapVals As Variant
     Dim tempPath As String, stm As Object, httpStatus As Long
-    Dim errText As String
+    Dim errText As String, wasAutoSync As Boolean
 
     On Error GoTo Fail
     Set ws = ThisWorkbook.Worksheets("Movimenti")
     Set snapshotWs = GetOrCreateSyncSheet(ThisWorkbook)
     Set snapshot = LoadSyncSnapshot(snapshotWs)
     Set newIds = CreateObject("Scripting.Dictionary"): newIds.CompareMode = vbTextCompare
-    email = InputBox("Inserisci l'email usata per accedere a Bilancio Casa:", "Sincronizzazione diretta")
-    If Len(Trim$(email)) = 0 Then Exit Sub
-    password = InputBox("Inserisci la password di Bilancio Casa. Non verrà salvata.", "Sincronizzazione diretta")
-    If Len(password) = 0 Then Exit Sub
+    If gSyncBusy Then Exit Sub
+    gSyncBusy = True
+
+    If Len(gRefreshToken) > 0 Then
+        response = HttpRequest("POST", SUPABASE_URL & "/auth/v1/token?grant_type=refresh_token", _
+            "{""refresh_token"":" & JsonString(gRefreshToken) & "}", _
+            "application/json", "", httpStatus)
+        If httpStatus >= 200 And httpStatus < 300 Then
+            token = JsonGetString(response, "access_token")
+            If Len(JsonGetString(response, "refresh_token")) > 0 Then gRefreshToken = JsonGetString(response, "refresh_token")
+            If Len(JsonGetObjectString(response, "user", "id")) > 0 Then gCachedUserId = JsonGetObjectString(response, "user", "id")
+            If Len(token) > 0 And Len(gCachedUserId) > 0 Then
+                userId = gCachedUserId
+                gCachedAccessToken = token
+            Else
+                gRefreshToken = vbNullString
+            End If
+        Else
+            gRefreshToken = vbNullString
+        End If
+    End If
+
+    If Len(gRefreshToken) = 0 Then
+        email = InputBox("Inserisci l'email usata per accedere a Bilancio Casa:", "Sincronizzazione diretta")
+        If Len(Trim$(email)) = 0 Then GoTo Cancelled
+        password = InputBox("Inserisci la password di Bilancio Casa. Non verrà salvata.", "Sincronizzazione diretta")
+        If Len(password) = 0 Then GoTo Cancelled
+        response = HttpRequest("POST", SUPABASE_URL & "/auth/v1/token?grant_type=password", _
+            "{""email"":" & JsonString(email) & ",""password"":" & JsonString(password) & "}", _
+            "application/json", "", httpStatus)
+        password = vbNullString
+        If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 701, , "Accesso Supabase non riuscito (" & httpStatus & "). Verifica email e password."
+        token = JsonGetString(response, "access_token")
+        gRefreshToken = JsonGetString(response, "refresh_token")
+        userId = JsonGetObjectString(response, "user", "id")
+        If Len(token) = 0 Or Len(userId) = 0 Or Len(gRefreshToken) = 0 Then Err.Raise vbObjectError + 702, , "Risposta di accesso incompleta."
+        gCachedAccessToken = token
+        gCachedUserId = userId
+        gCachedEmail = email
+    Else
+        token = gCachedAccessToken
+        userId = gCachedUserId
+    End If
 
     oldCalc = Application.Calculation
     oldEvents = Application.EnableEvents
@@ -42,14 +90,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
     Application.EnableEvents = False
     Application.Calculation = xlCalculationManual
 
-    response = HttpRequest("POST", SUPABASE_URL & "/auth/v1/token?grant_type=password", _
-        "{""email"":" & JsonString(email) & ",""password"":" & JsonString(password) & "}", _
-        "application/json", "", httpStatus)
-    password = vbNullString
-    If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 701, , "Accesso Supabase non riuscito (" & httpStatus & "). Verifica email e password."
-    token = JsonGetString(response, "access_token")
-    userId = JsonGetObjectString(response, "user", "id")
-    If Len(token) = 0 Or Len(userId) = 0 Then Err.Raise vbObjectError + 702, , "Risposta di accesso incompleta."
+    ' Token e ID utente già ottenuti o rinnovati nel blocco di autenticazione sopra.
 
     headerRow = FindHeaderRow(ws, "idmovimento")
     If headerRow = 0 Then Err.Raise vbObjectError + 703, , "Non trovo la colonna ID movimento nel foglio Movimenti."
@@ -248,14 +289,24 @@ Public Sub SincronizzaBilancioCasaDiretto()
     tmpWb.Close SaveChanges:=False
     If Len(Dir$(tempPath)) > 0 Then Kill tempPath
     Application.Calculation = oldCalc: Application.EnableEvents = oldEvents: Application.ScreenUpdating = oldScreen
-    MsgBox "Sincronizzazione diretta completata." & vbCrLf & _
-        "Nuovi movimenti inviati da Excel: " & sent & vbCrLf & "Movimenti aggiunti in Excel: " & added & vbCrLf & _
-        "Movimenti ricevuti dal database: " & downloaded & vbCrLf & _
-        "Nessun movimento è stato cancellato." & vbCrLf & _
-        "Le modifiche univoche sono state riconciliate; in caso di conflitto la macro si ferma senza sovrascrivere le versioni diverse.", vbInformation
+    gSyncBusy = False
+    If gAutoSyncEnabled Then
+        PianificaProssimaSincronizzazione
+    Else
+        MsgBox "Sincronizzazione diretta completata." & vbCrLf & _
+            "Nuovi movimenti inviati da Excel: " & sent & vbCrLf & "Movimenti aggiunti in Excel: " & added & vbCrLf & _
+            "Movimenti ricevuti dal database: " & downloaded & vbCrLf & _
+            "Nessun movimento è stato cancellato." & vbCrLf & _
+            "Le modifiche univoche sono state riconciliate; in caso di conflitto la macro si ferma senza sovrascrivere le versioni diverse.", vbInformation
+    End If
+    Exit Sub
+
+Cancelled:
+    gSyncBusy = False
     Exit Sub
 
 Fail:
+    wasAutoSync = gAutoSyncEnabled
     errText = "Errore " & Err.Number & ": " & Err.Description
     On Error Resume Next
     password = vbNullString
@@ -266,8 +317,44 @@ Fail:
         Application.EnableEvents = oldEvents
         Application.ScreenUpdating = oldScreen
     End If
+    gSyncBusy = False
+    If gAutoSyncEnabled Then
+        gAutoSyncEnabled = False
+        On Error Resume Next
+        If gNextSyncTime <> 0 Then Application.OnTime EarliestTime:=gNextSyncTime, Procedure:="SincronizzazioneBilancioCasaTimer", Schedule:=False
+        On Error GoTo 0
+    End If
     On Error GoTo 0
-    MsgBox errText, vbExclamation, "Sincronizzazione Bilancio Casa"
+    MsgBox errText & IIf(wasAutoSync, vbCrLf & "Automazione arrestata.", ""), vbExclamation, "Sincronizzazione Bilancio Casa"
+End Sub
+
+' Avvia una sincronizzazione immediata e poi ripete ogni 15 minuti.
+Public Sub AvviaSincronizzazioneAutomatica()
+    gAutoSyncEnabled = True
+    SincronizzaBilancioCasaDiretto
+End Sub
+
+' Arresta il timer; non modifica i dati già sincronizzati.
+Public Sub FermaSincronizzazioneAutomatica()
+    gAutoSyncEnabled = False
+    On Error Resume Next
+    If gNextSyncTime <> 0 Then Application.OnTime EarliestTime:=gNextSyncTime, Procedure:="SincronizzazioneBilancioCasaTimer", Schedule:=False
+    On Error GoTo 0
+    gNextSyncTime = 0
+    MsgBox "Sincronizzazione automatica arrestata.", vbInformation
+End Sub
+
+Public Sub SincronizzazioneBilancioCasaTimer()
+    If Not gAutoSyncEnabled Or gSyncBusy Then Exit Sub
+    SincronizzaBilancioCasaDiretto
+End Sub
+
+Private Sub PianificaProssimaSincronizzazione()
+    On Error Resume Next
+    If gNextSyncTime <> 0 Then Application.OnTime EarliestTime:=gNextSyncTime, Procedure:="SincronizzazioneBilancioCasaTimer", Schedule:=False
+    On Error GoTo 0
+    gNextSyncTime = Now + TimeSerial(0, 15, 0)
+    Application.OnTime EarliestTime:=gNextSyncTime, Procedure:="SincronizzazioneBilancioCasaTimer", Schedule:=True
 End Sub
 
 Private Function HttpRequest(ByVal method As String, ByVal url As String, ByVal body As String, _
