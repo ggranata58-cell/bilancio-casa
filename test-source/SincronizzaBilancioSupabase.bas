@@ -488,6 +488,7 @@ Private Sub RipristinaFormulaGiorno(ByVal ws As Worksheet, ByVal hdr As Object, 
     Dim dayCol As Long, dateCol As Long, typeCol As Long
     Dim firstRow As Long, lastRow As Long, r As Long
     Dim dateOffset As Long, dateRef As String, formulaText As String
+    Dim lo As ListObject
 
     If Not hdr.Exists("giorno") Or Not hdr.Exists("data") Then Exit Sub
 
@@ -502,8 +503,7 @@ Private Sub RipristinaFormulaGiorno(ByVal ws As Worksheet, ByVal hdr As Object, 
         End If
     End If
 
-    If Not ws.ListObjects.Count = 0 Then
-        Dim lo As ListObject
+    If ws.ListObjects.Count > 0 Then
         For Each lo In ws.ListObjects
             If lo.HeaderRowRange.Row = headerRow Then
                 If lo.DataBodyRange Is Nothing Then Exit Sub
