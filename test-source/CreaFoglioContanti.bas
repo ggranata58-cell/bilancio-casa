@@ -14,6 +14,7 @@ Public Sub CreaFoglioContanti()
     Dim dateCol As Long, c As Range, hasDate As Boolean
     Dim answer As VbMsgBoxResult
     Dim formulaBank As String, formulaWithdrawals As String
+    Dim cashAvailable As Double
     Dim monthlyRow As Long, annualRow As Long, i As Long
 
     On Error GoTo Fail
@@ -38,7 +39,16 @@ Public Sub CreaFoglioContanti()
         Exit Sub
     End If
 
-    answer = MsgBox("Il foglio Contanti verrà ricreato da zero. Se esiste già, il suo contenuto sarà sostituito. Continuare?", _
+    cashAvailable = 50
+    Set oldSheet = Nothing
+    On Error Resume Next
+    Set oldSheet = wb.Worksheets("Contanti")
+    If Not oldSheet Is Nothing Then
+        If IsNumeric(oldSheet.Range("B3").Value) Then cashAvailable = Application.Max(0, CDbl(oldSheet.Range("B3").Value))
+    End If
+    On Error GoTo Fail
+
+    answer = MsgBox("Il foglio Contanti verrà ricreato da zero. Se esiste già, il suo contenuto sarà sostituito; il valore di Contanti disponibili verrà conservato. Continuare?", _
                     vbYesNo + vbQuestion + vbDefaultButton2, "Ricrea foglio Contanti")
     If answer <> vbYes Then Exit Sub
 
@@ -80,7 +90,7 @@ Public Sub CreaFoglioContanti()
         .Range("A1").Font.Size = 16
 
         .Range("A3").Value = "Contanti disponibili (€)"
-        .Range("B3").Value = 50
+        .Range("B3").Value = cashAvailable
         .Range("B3").Interior.Color = RGB(255, 242, 204)
         .Range("B3").NumberFormat = "#,##0.00 €"
         .Range("A4").Value = "Totale soldi disponibili (€)"
@@ -138,7 +148,7 @@ Public Sub CreaFoglioContanti()
         annualRow = 17
         For i = firstYear To lastYear
             .Cells(annualRow, 5).Value = i
-            .Cells(annualRow, 6).FormulaLocal = "=SOMMA.PIÙ.SE(MovimentiTbl[Importo];MovimentiTbl[Categoria];""Prelievo contanti"";MovimentiTbl[Tipo];""Uscita"";MovimentiTbl[Data];"">=""&DATA(E" & annualRow & ";1;1);MovimentiTbl[Data];""<""&DATA(E" & annualRow + 1 & ";1;1))"
+            .Cells(annualRow, 6).FormulaLocal = "=SOMMA.PIÙ.SE(MovimentiTbl[Importo];MovimentiTbl[Categoria];""Prelievo contanti"";MovimentiTbl[Tipo];""Uscita"";MovimentiTbl[Data];"">=""&DATA(E" & annualRow & ";1;1);MovimentiTbl[Data];""<""&DATA(" & CStr(i + 1) & ";1;1))"
             .Cells(annualRow, 6).NumberFormat = "#,##0.00 €"
             annualRow = annualRow + 1
         Next i
