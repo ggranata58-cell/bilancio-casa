@@ -700,10 +700,10 @@ Private Sub RipristinaFormulaGiorno(ByVal ws As Worksheet, ByVal hdr As Object, 
         dateRef = "RC"
     End If
 
-    formulaText = "=IF(RC" & Mid$(dateRef, 2) & "="""","""",IF(RC" & Mid$(dateRef, 2) & "<>R[-1]C" & Mid$(dateRef, 2) & ",TEXT(RC" & Mid$(dateRef, 2) & ",""dddd""),""""))"
+    formulaText = "=SE(RC" & Mid$(dateRef, 2) & "="""";"""";SE(RC" & Mid$(dateRef, 2) & "<>R[-1]C" & Mid$(dateRef, 2) & ";TESTO(RC" & Mid$(dateRef, 2) & ";""gggg"");""""))"
     For r = firstRow To lastRow
         If Len(Trim$(CStr(ws.Cells(r, dateCol).Value))) > 0 Then
-            ws.Cells(r, dayCol).FormulaR1C1 = formulaText
+            ws.Cells(r, dayCol).FormulaR1C1Local = formulaText
         Else
             ws.Cells(r, dayCol).ClearContents
         End If
