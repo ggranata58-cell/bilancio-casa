@@ -49,7 +49,7 @@ Private Const CRED_TARGET As String = "BilancioCasa.Supabase.RefreshToken"
 ' Non usa CSV esportati manualmente. Non cancella mai movimenti. (ramo di test)
 ' In assenza di snapshot, rileva i conflitti e si ferma senza sovrascrivere i dati.
 ' Richiede Excel 2013 e WinHTTP (presente in Windows).
-' Password non salvata; il refresh token resta solo in memoria durante la sessione Excel.
+' Password non salvata; il refresh token è conservato nel Gestore credenziali di Windows.
 
 Private Const SUPABASE_URL As String = "https://bstcydrgyspgofckzybl.supabase.co"
 Private Const SUPABASE_KEY As String = "sb_publishable_LURu7IVWMgryAlEq6upJKQ_wrTMfBJ6"
@@ -98,12 +98,12 @@ Public Sub SincronizzaBilancioCasaDiretto()
             Else
                 If gTimerTriggered Then Err.Raise vbObjectError + 703, , "La sessione automatica non è più valida. Esegui una sincronizzazione manuale per accedere di nuovo."
                 gRefreshToken = vbNullString
-            DeleteSavedRefreshToken
                 DeleteSavedRefreshToken
             End If
         Else
             If gTimerTriggered Then Err.Raise vbObjectError + 704, , "La sessione automatica è scaduta o non è rinnovabile. Esegui una sincronizzazione manuale per accedere di nuovo."
             gRefreshToken = vbNullString
+            DeleteSavedRefreshToken
         End If
     End If
 
