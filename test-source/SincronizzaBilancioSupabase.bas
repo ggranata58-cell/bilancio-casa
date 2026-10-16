@@ -10,6 +10,41 @@ Private gSyncBusy As Boolean
 Private gTimerTriggered As Boolean
 Private gNextSyncTime As Date
 
+
+' Conserva il refresh token nel Gestore credenziali di Windows (non la password).
+Private Type FILETIME_CRED
+    dwLowDateTime As Long
+    dwHighDateTime As Long
+End Type
+
+Private Type CREDENTIALW
+    Flags As Long
+    CredentialType As Long
+    TargetName As LongPtr
+    Comment As LongPtr
+    LastWritten As FILETIME_CRED
+    CredentialBlobSize As Long
+    CredentialBlob As LongPtr
+    Persist As Long
+    AttributeCount As Long
+    Attributes As LongPtr
+    TargetAlias As LongPtr
+    UserName As LongPtr
+End Type
+
+Private Declare PtrSafe Function CredWriteW Lib "advapi32.dll" (ByRef Credential As CREDENTIALW, ByVal Flags As Long) As Long
+Private Declare PtrSafe Function CredReadW Lib "advapi32.dll" (ByVal TargetName As LongPtr, ByVal CredentialType As Long, ByVal Flags As Long, ByRef Credential As LongPtr) As Long
+Private Declare PtrSafe Function CredDeleteW Lib "advapi32.dll" (ByVal TargetName As LongPtr, ByVal CredentialType As Long, ByVal Flags As Long) As Long
+Private Declare PtrSafe Sub CredFree Lib "advapi32.dll" (ByVal Buffer As LongPtr)
+Private Declare PtrSafe Function LocalAlloc Lib "kernel32.dll" (ByVal uFlags As Long, ByVal uBytes As LongPtr) As LongPtr
+Private Declare PtrSafe Function LocalFree Lib "kernel32.dll" (ByVal hMem As LongPtr) As LongPtr
+Private Declare PtrSafe Sub CopyMemoryFromPointer Lib "kernel32.dll" Alias "RtlMoveMemory" (ByRef Destination As Any, ByVal Source As LongPtr, ByVal Length As LongPtr)
+Private Declare PtrSafe Sub CopyMemoryToPointer Lib "kernel32.dll" Alias "RtlMoveMemory" (ByVal Destination As LongPtr, ByVal Source As LongPtr, ByVal Length As LongPtr)
+
+Private Const CRED_TYPE_GENERIC As Long = 1
+Private Const CRED_PERSIST_LOCAL_MACHINE As Long = 2
+Private Const CRED_TARGET As String = "BilancioCasa.Supabase.RefreshToken"
+
 ' Sincronizzazione diretta Excel <-> Supabase per Bilancio Casa.
 ' Non usa CSV esportati manualmente. Non cancella mai movimenti. (ramo di test)
 ' In assenza di snapshot, rileva i conflitti e si ferma senza sovrascrivere i dati.
@@ -44,13 +79,18 @@ Public Sub SincronizzaBilancioCasaDiretto()
     If gSyncBusy Then Exit Sub
     gSyncBusy = True
 
+    If Len(gRefreshToken) = 0 Then gRefreshToken = LoadSavedRefreshToken()
+
     If Len(gRefreshToken) > 0 Then
         response = HttpRequest("POST", SUPABASE_URL & "/auth/v1/token?grant_type=refresh_token", _
             "{""refresh_token"":" & JsonString(gRefreshToken) & "}", _
             "application/json", "", httpStatus)
         If httpStatus >= 200 And httpStatus < 300 Then
             token = JsonGetString(response, "access_token")
-            If Len(JsonGetString(response, "refresh_token")) > 0 Then gRefreshToken = JsonGetString(response, "refresh_token")
+            If Len(JsonGetString(response, "refresh_token")) > 0 Then
+                gRefreshToken = JsonGetString(response, "refresh_token")
+                SaveRefreshTokenToCredentialManager gRefreshToken
+            End If
             If Len(JsonGetObjectString(response, "user", "id")) > 0 Then gCachedUserId = JsonGetObjectString(response, "user", "id")
             If Len(token) > 0 And Len(gCachedUserId) > 0 Then
                 userId = gCachedUserId
@@ -58,6 +98,8 @@ Public Sub SincronizzaBilancioCasaDiretto()
             Else
                 If gTimerTriggered Then Err.Raise vbObjectError + 703, , "La sessione automatica non è più valida. Esegui una sincronizzazione manuale per accedere di nuovo."
                 gRefreshToken = vbNullString
+            DeleteSavedRefreshToken
+                DeleteSavedRefreshToken
             End If
         Else
             If gTimerTriggered Then Err.Raise vbObjectError + 704, , "La sessione automatica è scaduta o non è rinnovabile. Esegui una sincronizzazione manuale per accedere di nuovo."
@@ -78,6 +120,7 @@ Public Sub SincronizzaBilancioCasaDiretto()
         If httpStatus < 200 Or httpStatus >= 300 Then Err.Raise vbObjectError + 701, , "Accesso Supabase non riuscito (" & httpStatus & "). Verifica email e password."
         token = JsonGetString(response, "access_token")
         gRefreshToken = JsonGetString(response, "refresh_token")
+        SaveRefreshTokenToCredentialManager gRefreshToken
         userId = JsonGetObjectString(response, "user", "id")
         If Len(token) = 0 Or Len(userId) = 0 Or Len(gRefreshToken) = 0 Then Err.Raise vbObjectError + 702, , "Risposta di accesso incompleta."
         gCachedAccessToken = token
@@ -372,6 +415,76 @@ Private Sub PianificaProssimaSincronizzazione()
     On Error GoTo 0
     gNextSyncTime = Now + TimeSerial(0, 15, 0)
     Application.OnTime EarliestTime:=gNextSyncTime, Procedure:="SincronizzazioneBilancioCasaTimer", Schedule:=True
+End Sub
+
+
+' Legge il refresh token dal Gestore credenziali di Windows.
+Private Function LoadSavedRefreshToken() As String
+    Dim pCredential As LongPtr
+    Dim cred As CREDENTIALW
+    Dim value As String
+    On Error GoTo CleanFail
+
+    If CredReadW(StrPtr(CRED_TARGET), CRED_TYPE_GENERIC, 0, pCredential) = 0 Then Exit Function
+    CopyMemoryFromPointer cred, pCredential, LenB(cred)
+    If cred.CredentialBlobSize > 0 And cred.CredentialBlob <> 0 Then
+        If (cred.CredentialBlobSize Mod 2) = 0 Then
+            value = String$(cred.CredentialBlobSize \ 2, vbNullChar)
+            CopyMemoryToPointer StrPtr(value), cred.CredentialBlob, cred.CredentialBlobSize
+            LoadSavedRefreshToken = value
+        End If
+    End If
+CleanExit:
+    If pCredential <> 0 Then CredFree pCredential
+    Exit Function
+CleanFail:
+    LoadSavedRefreshToken = vbNullString
+    Resume CleanExit
+End Function
+
+' Salva esclusivamente il refresh token, mai la password.
+Private Sub SaveRefreshTokenToCredentialManager(ByVal value As String)
+    Dim cred As CREDENTIALW
+    Dim blobPointer As LongPtr
+    Dim target As String
+    Dim blobBytes As Long
+
+    If Len(value) = 0 Then Exit Sub
+    On Error GoTo CleanFail
+
+    target = CRED_TARGET
+    blobBytes = Len(value) * 2
+    blobPointer = LocalAlloc(0, blobBytes)
+    If blobPointer = 0 Then Exit Sub
+    CopyMemoryToPointer blobPointer, StrPtr(value), blobBytes
+
+    cred.Flags = 0
+    cred.CredentialType = CRED_TYPE_GENERIC
+    cred.TargetName = StrPtr(target)
+    cred.Comment = 0
+    cred.CredentialBlobSize = blobBytes
+    cred.CredentialBlob = blobPointer
+    cred.Persist = CRED_PERSIST_LOCAL_MACHINE
+    cred.AttributeCount = 0
+    cred.Attributes = 0
+    cred.TargetAlias = 0
+    cred.UserName = 0
+
+    Call CredWriteW(cred, 0)
+CleanExit:
+    If blobPointer <> 0 Then LocalFree blobPointer
+    Exit Sub
+CleanFail:
+    Resume CleanExit
+End Sub
+
+' Elimina un eventuale token scaduto dal Gestore credenziali.
+Private Sub DeleteSavedRefreshToken()
+    Dim target As String
+    target = CRED_TARGET
+    On Error Resume Next
+    Call CredDeleteW(StrPtr(target), CRED_TYPE_GENERIC, 0)
+    On Error GoTo 0
 End Sub
 
 Private Function HttpRequest(ByVal method As String, ByVal url As String, ByVal body As String, _
