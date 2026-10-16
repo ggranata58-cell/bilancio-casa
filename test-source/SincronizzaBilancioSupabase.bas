@@ -430,6 +430,54 @@ Public Sub DiagnosticaTokenBilancioCasa()
     tokenMemorizzato = vbNullString
 End Sub
 
+' Diagnostica: prova il rinnovo Supabase senza sincronizzare dati e senza mostrare token.
+Public Sub DiagnosticaRinnovoTokenBilancioCasa()
+    Dim tokenSalvato As String, risposta As String
+    Dim stato As Long, accessToken As String, nuovoRefresh As String, userId As String
+    On Error GoTo GestioneErrore
+
+    tokenSalvato = LoadSavedRefreshToken()
+    If Len(tokenSalvato) = 0 Then
+        MsgBox "Windows non ha restituito un token. Nessuna sincronizzazione eseguita.", vbExclamation, "Diagnostica Bilancio Casa"
+        Exit Sub
+    End If
+
+    risposta = HttpRequest("POST", SUPABASE_URL & "/auth/v1/token?grant_type=refresh_token", _
+        "{""refresh_token"":" & JsonString(tokenSalvato) & "}", _
+        "application/json", "", stato)
+
+    If stato >= 200 And stato < 300 Then
+        accessToken = JsonGetString(risposta, "access_token")
+        nuovoRefresh = JsonGetString(risposta, "refresh_token")
+        userId = JsonGetObjectString(risposta, "user", "id")
+        If Len(nuovoRefresh) > 0 Then
+            SaveRefreshTokenToCredentialManager nuovoRefresh
+            gRefreshToken = nuovoRefresh
+        End If
+        If Len(userId) > 0 Then gCachedUserId = userId
+        If Len(accessToken) > 0 Then gCachedAccessToken = accessToken
+        MsgBox "Supabase ha accettato il token (HTTP " & stato & ")." & vbCrLf & _
+            "Access token ricevuto: " & IIf(Len(accessToken) > 0, "SÌ", "NO") & vbCrLf & _
+            "ID utente letto dalla risposta: " & IIf(Len(userId) > 0, "SÌ", "NO") & vbCrLf & _
+            "Nuovo refresh token: " & IIf(Len(nuovoRefresh) > 0, "SÌ", "NO") & vbCrLf & _
+            "Nessuna sincronizzazione di movimenti è stata eseguita.", vbInformation, "Diagnostica Bilancio Casa"
+    Else
+        MsgBox "Supabase non ha accettato il token (HTTP " & stato & ")." & vbCrLf & _
+            "La credenziale salvata NON è stata cancellata e non è stata eseguita alcuna sincronizzazione.", vbExclamation, "Diagnostica Bilancio Casa"
+    End If
+
+Uscita:
+    tokenSalvato = vbNullString
+    risposta = vbNullString
+    accessToken = vbNullString
+    nuovoRefresh = vbNullString
+    userId = vbNullString
+    Exit Sub
+GestioneErrore:
+    MsgBox "Errore durante la diagnostica (" & Err.Number & "). Nessuna sincronizzazione eseguita; la credenziale salvata non è stata cancellata.", vbExclamation, "Diagnostica Bilancio Casa"
+    Resume Uscita
+End Sub
+
 ' Legge il refresh token dal Gestore credenziali di Windows.
 Private Function LoadSavedRefreshToken() As String
     Dim pCredential As LongPtr
