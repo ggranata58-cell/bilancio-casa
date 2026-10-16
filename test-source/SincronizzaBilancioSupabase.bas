@@ -418,6 +418,18 @@ Private Sub PianificaProssimaSincronizzazione()
 End Sub
 
 
+' Diagnostica: verifica soltanto se Windows restituisce il token, senza mostrarlo.
+Public Sub DiagnosticaTokenBilancioCasa()
+    Dim tokenMemorizzato As String
+    tokenMemorizzato = LoadSavedRefreshToken()
+    If Len(tokenMemorizzato) > 0 Then
+        MsgBox "Lettura credenziali OK. Token recuperato (" & Len(tokenMemorizzato) & " caratteri). Nessun token è stato visualizzato.", vbInformation, "Diagnostica Bilancio Casa"
+    Else
+        MsgBox "Windows non ha restituito un token leggibile. Non eseguire altre sincronizzazioni per ora.", vbExclamation, "Diagnostica Bilancio Casa"
+    End If
+    tokenMemorizzato = vbNullString
+End Sub
+
 ' Legge il refresh token dal Gestore credenziali di Windows.
 Private Function LoadSavedRefreshToken() As String
     Dim pCredential As LongPtr
