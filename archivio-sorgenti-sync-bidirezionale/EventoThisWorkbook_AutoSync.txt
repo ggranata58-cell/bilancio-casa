@@ -1,0 +1,14 @@
+' DA INSERIRE NEL MODULO ThisWorkbook DEL FILE EXCEL (.xlsm)
+' Avvia la sincronizzazione automatica quando si apre il file.
+' La prima volta della sessione Excel chiederà email e password; non vengono salvate.
+' Dopo l'accesso, la sincronizzazione si ripete ogni 15 minuti finché Excel resta aperto.
+
+Private Sub Workbook_Open()
+    AvviaSincronizzazioneAutomatica
+End Sub
+
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    On Error Resume Next
+    FermaSincronizzazioneAutomatica True
+    On Error GoTo 0
+End Sub
