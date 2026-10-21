@@ -243,7 +243,7 @@ replace_once(
 "excluded movement categories")
 replace_once(
 "    const expenses = rows.filter(m => m.movement_type === 'Uscita').reduce((s, m) => s + m.amount, 0);",
-"    const expenses = rows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);\n    const excludedOutflows = rows.filter(m => m.movement_type === 'Uscita' && isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);",
+"    const ordinaryOutflows = rows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);\n    const interestCredits = rows.filter(m => m.movement_type === 'Entrata' && m.category === 'Interessi attivi').reduce((s, m) => s + m.amount, 0);\n    const expenses = Math.round((ordinaryOutflows - interestCredits + Number.EPSILON) * 100) / 100;\n    const excludedOutflows = rows.filter(m => m.movement_type === 'Uscita' && isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);",
 "separate ordinary and excluded expenses")
 replace_once(
 "return { ym, rows, income, expenses, budgetAllocated, taxReserve, budgetRemainder, monthOpen, closing, dayCount };",
