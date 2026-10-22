@@ -638,7 +638,7 @@ Private Function GetCashSyncBaseline(ByRef baseline As Double) As Boolean
     refText = ThisWorkbook.Names("BilancioCashLastSynced").RefersTo
     valueText = Replace(Mid$(refText, 2), ",", ".")
     If Len(valueText) = 0 Or Not IsNumeric(valueText) Then GoTo NoBaseline
-    baseline = CDbl(valueText)
+    baseline = CDbl(Replace(valueText, ".", Application.DecimalSeparator))
     GetCashSyncBaseline = True
     Exit Function
 NoBaseline:
