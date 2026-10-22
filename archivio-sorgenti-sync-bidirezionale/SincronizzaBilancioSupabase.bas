@@ -336,6 +336,10 @@ Public Sub SincronizzaBilancioCasaDiretto()
     RipristinaFormulaGiorno ws, hdr, headerRow
 
     SaveSyncSnapshot snapshotWs, ws, hdr, rowById
+
+    ' Allinea il saldo contanti di Excel al cloud, così l'app sui telefoni lo rilegge.
+    SyncCashBalanceToSupabase userId, token
+
     tmpWb.Close SaveChanges:=False
     If Len(Dir$(tempPath)) > 0 Then Kill tempPath
     Application.Calculation = oldCalc: Application.EnableEvents = oldEvents: Application.ScreenUpdating = oldScreen
@@ -546,6 +550,33 @@ Private Sub DeleteSavedRefreshToken()
     Call CredDeleteW(StrPtr(target), CRED_TYPE_GENERIC, 0)
     On Error GoTo 0
 End Sub
+
+Private Sub SyncCashBalanceToSupabase(ByVal userId As String, ByVal token As String)
+    Dim wsCash As Worksheet
+    Dim cashValue As Double
+    Dim body As String, url As String, response As String
+    Dim httpStatus As Long
+
+    Set wsCash = ThisWorkbook.Worksheets("Contanti")
+    If Not IsNumeric(wsCash.Range("B3").Value) Then
+        Err.Raise vbObjectError + 730, , "La cella Contanti!B3 non contiene un saldo numerico. I movimenti sono sincronizzati, ma il saldo contanti no."
+    End If
+
+    cashValue = CDbl(wsCash.Range("B3").Value)
+    If cashValue < 0 Then
+        Err.Raise vbObjectError + 731, , "Il saldo Contanti!B3 non può essere negativo."
+    End If
+
+    body = "{""user_id"":" & JsonString(userId) & _
+        ",""cash_balance"":" & Replace(Format$(cashValue, "0.00"), ",", ".") & _
+        ",""updated_at"":" & JsonString(Format$(Now, "yyyy-mm-dd\Thh:nn:ss")) & "}"
+    url = SUPABASE_URL & "/rest/v1/bilancio_cash_settings?on_conflict=user_id"
+    response = HttpRequest("POST", url, body, "application/json", token, httpStatus, "resolution=merge-duplicates,return=minimal")
+    If httpStatus < 200 Or httpStatus >= 300 Then
+        Err.Raise vbObjectError + 732, , "Errore sincronizzando Contanti!B3 con l'app (HTTP " & httpStatus & "): " & Left$(response, 250)
+    End If
+End Sub
+
 
 Private Function HttpRequest(ByVal method As String, ByVal url As String, ByVal body As String, _
     ByVal acceptType As String, ByVal bearer As String, ByRef status As Long, Optional ByVal prefer As String = "") As String
