@@ -179,11 +179,12 @@ jobs:
             }"""
           refresh_patch = """  async function refreshData() {
               await loadSettings();
+              await loadCashBalance();
               await loadMovements();
               renderAll();
             }
 
-            // Aggiorna i dati dal cloud senza ricaricare la pagina.
+            // Aggiorna movimenti e saldo contanti dal cloud senza ricaricare la pagina.
             // Evita il refresh mentre l'utente sta interagendo con un campo di input.
             let automaticRefreshRunning = false;
             setInterval(async () => {
@@ -192,6 +193,7 @@ jobs:
               if (active && (active.matches('input, textarea, select') || active.isContentEditable)) return;
               automaticRefreshRunning = true;
               try {
+                await loadCashBalance();
                 await loadMovements();
                 renderAll();
               } catch (error) {
@@ -531,7 +533,7 @@ jobs:
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
-          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.9", "bilancio-casa-shell-v0.2.12")
+          sw = sw_path.read_text(encoding="utf-8").replace("bilancio-casa-shell-v0.2.9", "bilancio-casa-shell-v0.2.13")
           sw_path.write_text(sw, encoding="utf-8")
           PY
           cp -a extracted/bilancio-casa-pwa/. public/
