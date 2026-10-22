@@ -237,6 +237,27 @@ replace_once(
 "      await loadSettings();\n      await loadCashBalance();\n      await loadMovements();",
 "load cash balance after login")
 replace_once(
+"""    } finally {
+      clearTimeout(saveTimeout);
+      setButtonBusy(button, false);
+    }
+  }
+
+  function renderDashboard() {""",
+"""    } finally {
+      clearTimeout(saveTimeout);
+      if (button) {
+        button.textContent = 'Salva saldo contanti';
+        button.disabled = false;
+        delete button.dataset.originalText;
+      }
+    }
+  }
+
+  function renderDashboard() {""",
+"force cash save button reset")
+
+replace_once(
 "    $('exportBtn').addEventListener('click', exportCsv);",
 "    $('exportBtn').addEventListener('click', exportCsv);\n    document.addEventListener('click', event => { if (event.target.closest('#saveCashBalanceBtn')) saveCashBalance(); });",
 "cash balance save action")
