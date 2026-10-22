@@ -200,7 +200,11 @@ replace_once(
     let saveTimeout;
     setButtonBusy(button, true, 'Salvataggio…');
     try {
-      saveTimeout = setTimeout(() => controller.abort(), 15000);
+      saveTimeout = setTimeout(() => {
+        controller.abort();
+        setButtonBusy(button, false);
+        showNotice('Il salvataggio non ha risposto entro 15 secondi. Il pulsante è stato riattivato; verifica il saldo prima di riprovare.', 'error');
+      }, 15000);
       const { error } = await db.from('bilancio_cash_settings').upsert({
         user_id: currentUser.id, cash_balance: rounded, updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' }).abortSignal(controller.signal);
