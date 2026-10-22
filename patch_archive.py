@@ -196,11 +196,14 @@ replace_once(
       return;
     }
     const button = $('saveCashBalanceBtn');
+    const controller = new AbortController();
+    let saveTimeout;
     setButtonBusy(button, true, 'Salvataggio…');
     try {
+      saveTimeout = setTimeout(() => controller.abort(), 15000);
       const { error } = await db.from('bilancio_cash_settings').upsert({
         user_id: currentUser.id, cash_balance: rounded, updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
+      }, { onConflict: 'user_id' }).abortSignal(controller.signal);
       if (error) throw error;
       cloudCashBalance = rounded;
       try { localStorage.setItem(cashBalanceKey(), rounded.toFixed(2)); } catch (_) {}
@@ -208,8 +211,15 @@ replace_once(
       renderCashPanel();
       showNotice('Saldo contanti salvato e sincronizzato.');
     } catch (error) {
-      showNotice('Errore nel salvataggio cloud del saldo contanti: ' + (error?.message || error), 'error');
-    } finally { setButtonBusy(button, false); }
+      if (error?.name === 'AbortError' || controller.signal.aborted) {
+        showNotice('Il salvataggio ha impiegato troppo tempo. Il pulsante è stato riattivato; verifica il saldo prima di riprovare.', 'error');
+      } else {
+        showNotice('Errore nel salvataggio cloud del saldo contanti: ' + (error?.message || error), 'error');
+      }
+    } finally {
+      clearTimeout(saveTimeout);
+      setButtonBusy(button, false);
+    }
   }
 
   function renderDashboard() {""",
