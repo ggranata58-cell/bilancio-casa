@@ -311,6 +311,7 @@ jobs:
             }
             // Il pulsante resta sempre visibile e flottante: non modifica il titolo né il selettore del mese.
             document.body.appendChild(button);
+          }
           """
           render_anchor = "  function renderDashboard() {"
           if app.count(render_anchor) != 1:
