@@ -582,7 +582,7 @@ jobs:
           })();
           </script>"""
           if 'removeInstallButton' not in html:
-              html = html.replace('</body>', install_button_script + '\\n</body>', 1)
+              html = html.replace('</body>', install_button_script + '\n</body>', 1)
 
           html_path.write_text(html, encoding="utf-8")
 
