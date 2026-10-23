@@ -309,8 +309,8 @@ jobs:
               render_anchor = "  function renderDashboard() {"
               if app.count(render_anchor) != 1:
                   raise SystemExit("Funzione renderDashboard non trovata in modo univoco")
-              app = app.replace(render_anchor, refresh_button_patch + "\\n" + render_anchor, 1)
-              app = app.replace(render_anchor, render_anchor + "\\n    ensureManualRefreshButton();", 1)
+              app = app.replace(render_anchor, refresh_button_patch + "\n" + render_anchor, 1)
+              app = app.replace(render_anchor, render_anchor + "\n    ensureManualRefreshButton();", 1)
           if "manualRefreshBtn" not in app:
               raise SystemExit("Verifica pulsante aggiornamento fallita")
 
