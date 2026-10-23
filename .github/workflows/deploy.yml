@@ -313,8 +313,42 @@ jobs:
             document.body.appendChild(button);
           }
           """
-          # Ripristino prudente: disattiva il pulsante sperimentale finché non è verificato
-          # nel browser reale. La versione precedente dell'app viene così ricostruita.
+          # Inserisce il pulsante Aggiorna senza modificare l'intestazione o il selettore del mese.
+          render_anchor = "  function renderDashboard() {"
+          if app.count(render_anchor) != 1:
+              raise SystemExit("Funzione renderDashboard non trovata in modo univoco")
+          if "function ensureManualRefreshButton()" not in app:
+              app = app.replace(render_anchor, refresh_button_patch + "\n" + render_anchor, 1)
+          app = app.replace(render_anchor, render_anchor + "\n    ensureManualRefreshButton();", 1)
+          init_anchor = "  async function initialize() {"
+          if init_anchor not in app:
+              raise SystemExit("Funzione initialize non trovata per il pulsante Aggiorna")
+          if "ensureManualRefreshButton();" not in app[app.index(init_anchor):app.index(init_anchor) + 150]:
+              app = app.replace(init_anchor, init_anchor + "\n    ensureManualRefreshButton();", 1)
+
+          # Mostra i nomi dei mesi in italiano invece del formato tecnico YYYY-MM.
+          month_anchor = "  function monthStart(ym) {"
+          month_patch = """  function populateMonthOptions() {
+            const select = $('periodMonth');
+            if (!select || select.tagName !== 'SELECT' || select.options.length) return;
+            const currentYear = Number(todayMonth().slice(0, 4));
+            for (let year = 2020; year <= currentYear + 2; year++) {
+              for (let month = 1; month <= 12; month++) {
+                const value = year + '-' + String(month).padStart(2, '0');
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = monthLabel(value);
+                select.appendChild(option);
+              }
+            }
+          }
+          """
+          if "function populateMonthOptions()" not in app:
+              if month_anchor not in app: raise SystemExit("Punto per selettore mese non trovato")
+              app = app.replace(month_anchor, month_patch + "\n" + month_anchor, 1)
+          app = app.replace(init_anchor, init_anchor + "\n    populateMonthOptions();", 1)
+          if "function ensureManualRefreshButton()" not in app or "ensureManualRefreshButton();" not in app:
+              raise SystemExit("Verifica pulsante Aggiorna fallita")
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
@@ -326,6 +360,8 @@ jobs:
                   raise SystemExit("Area messaggi di autenticazione non trovata")
               html = html.replace(marker, marker + '\n      <button id="authResendBtn" class="text-button" type="button">Invia di nuovo l’email di conferma</button>', 1)
           html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.5 · sincronizzazione cloud protetta')
+          html = html.replace('<input id="periodMonth" type="month" aria-label="Mese da consultare">', '<select id="periodMonth" aria-label="Mese da consultare"></select>')
+          html = html.replace('.month-picker input{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}', '.month-picker input,.month-picker select{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}')
           archive_script = r"""<script>
           (() => {
             const SIZE=10, states=new WeakMap();
@@ -568,28 +604,11 @@ jobs:
           """
           html = html[:panel_start] + new_backup_panel + html[panel_end:]
 
-          # Nasconde soltanto i controlli dell'app chiamati "Installa", senza rimuoverli dal DOM.
-          install_button_script = r"""<script id="hideInstallButtonScript">
-          (() => {
-            function hideInstallButton() {
-              document.querySelectorAll('button, a, [role="button"]').forEach(el => {
-                const label = (el.getAttribute('aria-label') || el.innerText || el.textContent || '').trim().toLocaleLowerCase();
-                if (label === 'installa' || label.startsWith('installa ')) el.style.setProperty('display', 'none', 'important');
-              });
-            }
-            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hideInstallButton, { once: true });
-            else hideInstallButton();
-            new MutationObserver(hideInstallButton).observe(document.body, { childList: true, subtree: true });
-          })();
-          </script>"""
-          if 'id="hideInstallButtonScript"' not in html:
-              html = html.replace('</body>', install_button_script + chr(10) + '</body>', 1)
-
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.19", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.20", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
