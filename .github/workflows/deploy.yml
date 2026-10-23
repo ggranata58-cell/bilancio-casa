@@ -313,24 +313,8 @@ jobs:
             document.body.appendChild(button);
           }
           """
-          render_anchor = "  function renderDashboard() {"
-          if app.count(render_anchor) != 1:
-              raise SystemExit("Funzione renderDashboard non trovata in modo univoco")
-          if "function ensureManualRefreshButton()" not in app:
-              app = app.replace(render_anchor, refresh_button_patch + "\n" + render_anchor, 1)
-          # Verifica separatamente la definizione e la chiamata: la sola presenza
-          # della funzione non garantisce che il pulsante venga creato.
-          if "ensureManualRefreshButton();" not in app:
-              app = app.replace(render_anchor, render_anchor + "\n    ensureManualRefreshButton();", 1)
-          # Garanzia: crea il pulsante all'avvio dell'app, non solo quando viene renderizzata la dashboard.
-          init_anchor = "  async function initialize() {"
-          if init_anchor not in app:
-              raise SystemExit("Funzione initialize non trovata per attivare il pulsante all'avvio")
-          if "ensureManualRefreshButton();" not in app[app.index(init_anchor):app.index(init_anchor) + 120]:
-              app = app.replace(init_anchor, init_anchor + "\n    ensureManualRefreshButton();", 1)
-          if "function ensureManualRefreshButton()" not in app or "ensureManualRefreshButton();" not in app:
-              raise SystemExit("Verifica pulsante aggiornamento fallita: funzione o chiamata mancante")
-
+          # Ripristino prudente: disattiva il pulsante sperimentale finché non è verificato
+          # nel browser reale. La versione precedente dell'app viene così ricostruita.
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
