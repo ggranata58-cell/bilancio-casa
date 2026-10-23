@@ -278,23 +278,21 @@ jobs:
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
           refresh_button_patch = r"""
-          // Pulsante manuale di aggiornamento, collocato accanto al titolo visibile.
+          // Pulsante Aggiorna ben visibile, indipendente dal layout del riepilogo.
           function ensureManualRefreshButton() {
             let button = document.getElementById('manualRefreshBtn');
-            // Elimina l'eventuale vecchia icona non interattiva e ricrea il pulsante con il nuovo comportamento.
-            if (button && button.dataset.manualRefreshV2 !== '1') {
-              button.remove();
-              button = null;
-            }
             if (!button) {
               button = document.createElement('button');
               button.id = 'manualRefreshBtn';
-              button.dataset.manualRefreshV2 = '1';
               button.type = 'button';
               button.textContent = '↻ AGGIORNA';
               button.title = 'Aggiorna i dati';
               button.setAttribute('aria-label', 'Aggiorna i dati');
-              button.style.cssText = 'display:inline-flex!important;align-items:center!important;justify-content:center!important;visibility:visible!important;opacity:1!important;width:auto!important;min-width:110px!important;height:38px!important;flex:0 0 auto!important;padding:0 12px!important;margin:0 0 0 12px!important;vertical-align:middle!important;white-space:nowrap!important;border-radius:20px!important;font-size:14px!important;font-weight:700!important;line-height:1!important;cursor:pointer!important;color:#fff!important;background:#1769aa!important;border:2px solid #1769aa!important;box-shadow:0 2px 8px #0005!important;position:fixed!important;bottom:16px!important;right:16px!important;z-index:2147483647!important;float:none!important';
+              document.body.appendChild(button);
+            }
+            button.style.cssText = 'position:fixed!important;bottom:18px!important;right:18px!important;top:auto!important;left:auto!important;z-index:2147483647!important;display:block!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;width:auto!important;min-width:140px!important;height:46px!important;padding:0 16px!important;border-radius:24px!important;font-size:16px!important;font-weight:800!important;line-height:1!important;cursor:pointer!important;color:#fff!important;background:#075eaa!important;border:2px solid #fff!important;box-shadow:0 4px 14px #0008!important;float:none!important';
+            if (button.dataset.refreshBound !== '1') {
+              button.dataset.refreshBound = '1';
               button.addEventListener('click', async () => {
                 if (button.disabled) return;
                 button.disabled = true;
@@ -309,8 +307,7 @@ jobs:
                 }
               });
             }
-            // Il pulsante resta sempre visibile e flottante: non modifica il titolo né il selettore del mese.
-            document.body.appendChild(button);
+            if (button.parentElement !== document.body) document.body.appendChild(button);
           }
           """
           # Inserisce il pulsante Aggiorna senza modificare l'intestazione o il selettore del mese.
@@ -366,9 +363,9 @@ jobs:
           html = html.replace('.dashboard-heading{align-items:flex-start;flex-direction:column}.month-picker{max-width:220px;width:100%}', '.dashboard-heading{align-items:flex-start;flex-direction:column}.dashboard-heading .month-picker{margin-left:0}.month-picker{max-width:220px;width:100%}')
           styles_path = root / "styles.css"
           styles = styles_path.read_text(encoding="utf-8")
-          styles = styles.replace(".month-picker input{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}", ".month-picker input,.month-picker select{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}")
-          styles = styles.replace(".dashboard-heading{align-items:flex-end}", ".dashboard-heading{align-items:center;justify-content:flex-start}.dashboard-heading .month-picker{margin-left:16px}")
-          styles = styles.replace(".dashboard-heading{align-items:flex-start;flex-direction:column}.month-picker{max-width:220px;width:100%}", ".dashboard-heading{align-items:flex-start;flex-direction:column}.dashboard-heading .month-picker{margin-left:0}.month-picker{max-width:220px;width:100%}")
+          styles = styles.replace(".month-picker input{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}", ".month-picker input,.month-picker select{display:block;width:100%;min-height:40px;background:#fff!important;border:1px solid var(--line);border-radius:10px;padding:8px;color:#18202a!important;opacity:1!important}.month-picker select option{background:#fff!important;color:#18202a!important}")
+          styles = styles.replace(".dashboard-heading{align-items:flex-end}", ".dashboard-heading{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:18px!important}.dashboard-heading .month-picker{margin:0!important;flex:0 0 170px!important}")
+          styles = styles.replace(".dashboard-heading{align-items:flex-start;flex-direction:column}.month-picker{max-width:220px;width:100%}", ".dashboard-heading{display:flex!important;align-items:flex-start!important;flex-direction:column!important;justify-content:flex-start!important;gap:8px!important}.dashboard-heading .month-picker{margin:0!important;max-width:220px;width:100%}")
           styles_path.write_text(styles, encoding="utf-8")
           archive_script = r"""<script>
           (() => {
