@@ -294,7 +294,7 @@ jobs:
               button.textContent = '↻ AGGIORNA';
               button.title = 'Aggiorna i dati';
               button.setAttribute('aria-label', 'Aggiorna i dati');
-              button.style.cssText = 'display:inline-flex!important;align-items:center!important;justify-content:center!important;visibility:visible!important;opacity:1!important;width:auto!important;min-width:110px!important;height:38px!important;flex:0 0 auto!important;padding:0 12px!important;margin:0 0 0 12px!important;vertical-align:middle!important;white-space:nowrap!important;border-radius:20px!important;font-size:14px!important;font-weight:700!important;line-height:1!important;cursor:pointer!important;color:#fff!important;background:#1769aa!important;border:2px solid #1769aa!important;box-shadow:0 2px 8px #0005!important;position:static!important;float:none!important';
+              button.style.cssText = 'display:inline-flex!important;align-items:center!important;justify-content:center!important;visibility:visible!important;opacity:1!important;width:auto!important;min-width:110px!important;height:38px!important;flex:0 0 auto!important;padding:0 12px!important;margin:0 0 0 12px!important;vertical-align:middle!important;white-space:nowrap!important;border-radius:20px!important;font-size:14px!important;font-weight:700!important;line-height:1!important;cursor:pointer!important;color:#fff!important;background:#1769aa!important;border:2px solid #1769aa!important;box-shadow:0 2px 8px #0005!important;position:fixed!important;bottom:16px!important;right:16px!important;z-index:2147483647!important;float:none!important';
               button.addEventListener('click', async () => {
                 if (button.disabled) return;
                 button.disabled = true;
@@ -309,36 +309,8 @@ jobs:
                 }
               });
             }
-            const placeRefreshButton = () => {
-              const norm = value => (value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/\\s+/g, ' ').trim().toUpperCase();
-              // Usa solo il titolo vero, senza modificare il layout del contenitore che include il mese.
-              const heading = [...document.querySelectorAll('h1,h2,h3,h4')]
-                .find(el => norm(el.textContent).includes('SITUAZIONE DEL TUO CONTO'));
-              if (heading && heading.isConnected) {
-                if (button.parentElement !== heading) heading.appendChild(button);
-                button.style.setProperty('position', 'static', 'important');
-                button.style.setProperty('top', 'auto', 'important');
-                button.style.setProperty('right', 'auto', 'important');
-                button.style.setProperty('z-index', 'auto', 'important');
-                return true;
-              }
-              button.style.setProperty('position', 'fixed', 'important');
-              button.style.setProperty('top', '12px', 'important');
-              button.style.setProperty('right', '14px', 'important');
-              button.style.setProperty('z-index', '2147483647', 'important');
-              return false;
-            };
-            if (!placeRefreshButton()) {
-              button.style.setProperty('display', 'none', 'important');
-              const observer = new MutationObserver(() => {
-                if (placeRefreshButton()) {
-                  button.style.setProperty('display', 'inline-flex', 'important');
-                  observer.disconnect();
-                }
-              });
-              observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-            }
-          }
+            // Il pulsante resta sempre visibile e flottante: non modifica il titolo né il selettore del mese.
+            document.body.appendChild(button);
           """
           render_anchor = "  function renderDashboard() {"
           if app.count(render_anchor) != 1:
@@ -611,11 +583,28 @@ jobs:
           """
           html = html[:panel_start] + new_backup_panel + html[panel_end:]
 
+          # Nasconde soltanto i controlli dell'app chiamati "Installa", senza rimuoverli dal DOM.
+          install_button_script = r"""<script id="hideInstallButtonScript">
+          (() => {
+            function hideInstallButton() {
+              document.querySelectorAll('button, a, [role="button"]').forEach(el => {
+                const label = (el.getAttribute('aria-label') || el.innerText || el.textContent || '').trim().toLocaleLowerCase();
+                if (label === 'installa' || label.startsWith('installa ')) el.style.setProperty('display', 'none', 'important');
+              });
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hideInstallButton, { once: true });
+            else hideInstallButton();
+            new MutationObserver(hideInstallButton).observe(document.body, { childList: true, subtree: true });
+          })();
+          </script>"""
+          if 'id="hideInstallButtonScript"' not in html:
+              html = html.replace('</body>', install_button_script + chr(10) + '</body>', 1)
+
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.17", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.18", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
