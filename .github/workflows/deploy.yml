@@ -281,9 +281,15 @@ jobs:
           // Pulsante manuale di aggiornamento, collocato accanto al titolo visibile.
           function ensureManualRefreshButton() {
             let button = document.getElementById('manualRefreshBtn');
+            // Elimina l'eventuale vecchia icona non interattiva e ricrea il pulsante con il nuovo comportamento.
+            if (button && button.dataset.manualRefreshV2 !== '1') {
+              button.remove();
+              button = null;
+            }
             if (!button) {
               button = document.createElement('button');
               button.id = 'manualRefreshBtn';
+              button.dataset.manualRefreshV2 = '1';
               button.type = 'button';
               button.textContent = '↻ AGGIORNA';
               button.title = 'Aggiorna i dati';
