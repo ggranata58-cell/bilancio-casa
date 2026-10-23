@@ -277,6 +277,43 @@ jobs:
               app = app.replace(init_marker, backup_patch + "\n" + init_marker, 1)
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
+          refresh_button_patch = r"""
+          // Pulsante manuale di aggiornamento: non modifica movimenti o impostazioni.
+          function ensureManualRefreshButton() {
+            if (document.getElementById('manualRefreshBtn')) return;
+            const button = document.createElement('button');
+            button.id = 'manualRefreshBtn';
+            button.type = 'button';
+            button.textContent = '↻';
+            button.title = 'Aggiorna i dati';
+            button.setAttribute('aria-label', 'Aggiorna i dati');
+            button.style.cssText = 'position:fixed;top:12px;right:14px;z-index:1000;width:42px;height:42px;border-radius:50%;font-size:25px;line-height:1;cursor:pointer;background:var(--card-bg,#fff);border:1px solid var(--border-color,#ccc);box-shadow:0 2px 8px #0002';
+            document.body.appendChild(button);
+            button.addEventListener('click', async () => {
+              if (button.disabled) return;
+              button.disabled = true;
+              button.textContent = '…';
+              try {
+                await refreshData();
+              } catch (error) {
+                console.error('Aggiornamento manuale non riuscito:', error);
+                window.alert('Aggiornamento non riuscito. Riprova tra poco.');
+              } finally {
+                button.textContent = '↻';
+                button.disabled = false;
+              }
+            });
+          }
+          """
+          if "function ensureManualRefreshButton()" not in app:
+              render_anchor = "  function renderDashboard() {"
+              if app.count(render_anchor) != 1:
+                  raise SystemExit("Funzione renderDashboard non trovata in modo univoco")
+              app = app.replace(render_anchor, refresh_button_patch + "\n" + render_anchor, 1)
+              app = app.replace(render_anchor, render_anchor + "\n    ensureManualRefreshButton();", 1)
+          if "manualRefreshBtn" not in app:
+              raise SystemExit("Verifica pulsante aggiornamento fallita")
+
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
