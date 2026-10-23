@@ -567,6 +567,23 @@ jobs:
           """
           html = html[:panel_start] + new_backup_panel + html[panel_end:]
 
+          # Rimuove soltanto il pulsante d'installazione dall'interfaccia.
+          install_button_script = r"""<script>
+          (() => {
+            function removeInstallButton() {
+              document.querySelectorAll('button, a, [role="button"]').forEach(el => {
+                const label = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim().toLocaleLowerCase();
+                if (label === 'installa' || label.startsWith("installa ")) el.remove();
+              });
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', removeInstallButton, {once:true});
+            else removeInstallButton();
+            new MutationObserver(removeInstallButton).observe(document.documentElement, {childList:true, subtree:true});
+          })();
+          </script>"""
+          if 'removeInstallButton' not in html:
+              html = html.replace('</body>', install_button_script + '\\n</body>', 1)
+
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
