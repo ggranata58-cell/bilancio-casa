@@ -335,7 +335,7 @@ jobs:
               observer.observe(document.body, { childList: true, subtree: true, characterData: true });
             }
           }
-
+          """
           render_anchor = "  function renderDashboard() {"
           if app.count(render_anchor) != 1:
               raise SystemExit("Funzione renderDashboard non trovata in modo univoco")
