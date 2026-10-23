@@ -278,43 +278,64 @@ jobs:
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
           refresh_button_patch = r"""
-          // Pulsante manuale di aggiornamento: non modifica movimenti o impostazioni.
+          // Pulsante manuale di aggiornamento, collocato accanto al titolo visibile.
           function ensureManualRefreshButton() {
-            if (document.getElementById('manualRefreshBtn')) return;
-            const button = document.createElement('button');
-            button.id = 'manualRefreshBtn';
-            button.type = 'button';
-            button.textContent = '↻ AGGIORNA';
-            button.title = 'Aggiorna i dati';
-            button.setAttribute('aria-label', 'Aggiorna i dati');
-            button.style.cssText = 'display:inline-flex!important;align-items:center!important;justify-content:center!important;visibility:visible!important;opacity:1!important;width:auto!important;min-width:110px!important;height:38px!important;padding:0 12px!important;margin-left:12px!important;vertical-align:middle!important;white-space:nowrap!important;border-radius:20px!important;font-size:14px!important;font-weight:700!important;line-height:1!important;cursor:pointer!important;color:#fff!important;background:#1769aa!important;border:2px solid #fff!important;box-shadow:0 2px 8px #0005!important;position:static!important';
-            document.body.appendChild(button);
+            let button = document.getElementById('manualRefreshBtn');
+            if (!button) {
+              button = document.createElement('button');
+              button.id = 'manualRefreshBtn';
+              button.type = 'button';
+              button.textContent = '↻ AGGIORNA';
+              button.title = 'Aggiorna i dati';
+              button.setAttribute('aria-label', 'Aggiorna i dati');
+              button.style.cssText = 'display:inline-flex!important;align-items:center!important;justify-content:center!important;visibility:visible!important;opacity:1!important;width:auto!important;min-width:110px!important;height:38px!important;flex:0 0 auto!important;padding:0 12px!important;margin:0 0 0 12px!important;vertical-align:middle!important;white-space:nowrap!important;border-radius:20px!important;font-size:14px!important;font-weight:700!important;line-height:1!important;cursor:pointer!important;color:#fff!important;background:#1769aa!important;border:2px solid #1769aa!important;box-shadow:0 2px 8px #0005!important;position:static!important;float:none!important';
+              button.addEventListener('click', async () => {
+                if (button.disabled) return;
+                button.disabled = true;
+                button.textContent = 'Aggiorno…';
+                try { await refreshData(); }
+                catch (error) {
+                  console.error('Aggiornamento manuale non riuscito:', error);
+                  window.alert('Aggiornamento non riuscito. Riprova tra poco.');
+                } finally {
+                  button.textContent = '↻ AGGIORNA';
+                  button.disabled = false;
+                }
+              });
+            }
             const placeRefreshButton = () => {
-              const heading = [...document.querySelectorAll('h1,h2,h3,h4')].find(el => (el.textContent || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().includes('SITUAZIONE DEL TUO CONTO'));
-              if (heading) { heading.appendChild(button); button.style.setProperty('position','static','important'); return true; }
-              button.style.setProperty('position','fixed','important'); button.style.setProperty('top','12px','important'); button.style.setProperty('right','14px','important'); button.style.setProperty('z-index','2147483647','important');
-              return false;
+              const norm = value => (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+              const candidates = [...document.querySelectorAll('body *')]
+                .filter(el => el !== button && !button.contains(el))
+                .filter(el => norm(el.textContent).includes('SITUAZIONE DEL TUO CONTO'))
+                .filter(el => (el.textContent || '').trim().length < 160);
+              candidates.sort((a,b) => (a.textContent || '').trim().length - (b.textContent || '').trim().length);
+              const heading = candidates[0];
+              if (!heading || !heading.isConnected) return false;
+              heading.style.setProperty('display', 'inline-flex', 'important');
+              heading.style.setProperty('align-items', 'center', 'important');
+              heading.style.setProperty('flex-wrap', 'wrap', 'important');
+              heading.style.setProperty('max-width', '100%', 'important');
+              heading.style.setProperty('vertical-align', 'middle', 'important');
+              if (button.parentElement !== heading) heading.appendChild(button);
+              button.style.setProperty('position', 'static', 'important');
+              button.style.setProperty('top', 'auto', 'important');
+              button.style.setProperty('right', 'auto', 'important');
+              button.style.setProperty('z-index', 'auto', 'important');
+              return true;
             };
             if (!placeRefreshButton()) {
-              const observer = new MutationObserver(() => { if (placeRefreshButton()) observer.disconnect(); });
-              observer.observe(document.body, { childList:true, subtree:true });
+              button.style.setProperty('display', 'none', 'important');
+              const observer = new MutationObserver(() => {
+                if (placeRefreshButton()) {
+                  button.style.setProperty('display', 'inline-flex', 'important');
+                  observer.disconnect();
+                }
+              });
+              observer.observe(document.body, { childList: true, subtree: true, characterData: true });
             }
-            button.addEventListener('click', async () => {
-              if (button.disabled) return;
-              button.disabled = true;
-              button.textContent = '…';
-              try {
-                await refreshData();
-              } catch (error) {
-                console.error('Aggiornamento manuale non riuscito:', error);
-                window.alert('Aggiornamento non riuscito. Riprova tra poco.');
-              } finally {
-                button.textContent = '↻';
-                button.disabled = false;
-              }
-            });
           }
-          """
+
           render_anchor = "  function renderDashboard() {"
           if app.count(render_anchor) != 1:
               raise SystemExit("Funzione renderDashboard non trovata in modo univoco")
