@@ -277,6 +277,109 @@ jobs:
               app = app.replace(init_marker, backup_patch + "\n" + init_marker, 1)
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
+          dashboard_patch = r"""
+          // Tile con il risparmio netto cumulato già calcolato nel database.
+          function ensureCumulativeSavingsTile() {
+            const ids = ['statBalance', 'statIncome', 'statExpenses', 'statSavings', 'statTaxReserve'];
+            const elements = ids.map(id => $(id));
+            if (elements.some(el => !el)) return;
+            let grid = elements[0].parentElement;
+            while (grid && !elements.every(el => grid.contains(el))) grid = grid.parentElement;
+            if (!grid || $('statCumulativeSavings')) return;
+            const directChild = el => {
+              let node = el;
+              while (node.parentElement && node.parentElement !== grid) node = node.parentElement;
+              return node;
+            };
+            const taxCard = directChild($('statTaxReserve'));
+            if (!taxCard || taxCard.parentElement !== grid) return;
+            const card = taxCard.cloneNode(true);
+            card.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+            const value = card.querySelector('strong, b');
+            if (!value) return;
+            value.id = 'statCumulativeSavings';
+            value.textContent = '—';
+            const label = card.querySelector('span');
+            if (label) label.textContent = 'Risparmio netto cumulato';
+            const caption = card.querySelector('small, .small-note');
+            if (caption) {
+              caption.id = 'statCumulativeSavingsCaption';
+              caption.textContent = 'Caricamento ultimo dato…';
+            } else {
+              const note = document.createElement('small');
+              note.id = 'statCumulativeSavingsCaption';
+              note.textContent = 'Caricamento ultimo dato…';
+              card.appendChild(note);
+            }
+            taxCard.insertAdjacentElement('afterend', card);
+          }
+
+          async function loadCumulativeSavings() {
+            const value = $('statCumulativeSavings');
+            const caption = $('statCumulativeSavingsCaption');
+            if (!value || !caption || !db || !currentUser || loadCumulativeSavings.running) return;
+            loadCumulativeSavings.running = true;
+            try {
+              const { data, error } = await db.from('risparmio_mensile')
+                .select('mese,risparmio_netto_cumulato,stato')
+                .order('mese', { ascending: false }).limit(1).maybeSingle();
+              if (error) throw error;
+              if (!data) {
+                value.textContent = '—';
+                caption.textContent = 'Nessun dato disponibile';
+              } else {
+                value.textContent = money(Number(data.risparmio_netto_cumulato || 0));
+                const month = new Date(data.mese + 'T12:00:00').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+                caption.textContent = 'Ultimo dato: ' + month + (data.stato === 'provvisorio' ? ' · provvisorio' : ' · definitivo');
+              }
+            } catch (error) {
+              value.textContent = '—';
+              caption.textContent = 'Dato non disponibile';
+              console.warn('Lettura risparmio cumulato non riuscita:', error);
+            } finally {
+              loadCumulativeSavings.running = false;
+            }
+          }
+
+          function ensureManualRefreshButton() {
+            let button = $('manualRefreshBtn');
+            if (button) return;
+            button = document.createElement('button');
+            button.id = 'manualRefreshBtn';
+            button.type = 'button';
+            button.textContent = '↻';
+            button.title = 'Aggiorna i dati';
+            button.setAttribute('aria-label', 'Aggiorna i dati');
+            button.style.cssText = 'position:fixed;top:12px;right:14px;z-index:1000;width:42px;height:42px;border-radius:50%;font-size:25px;line-height:1;cursor:pointer;background:var(--card-bg,#fff);border:1px solid var(--border-color,#ccc);box-shadow:0 2px 8px #0002';
+            document.body.appendChild(button);
+            button.addEventListener('click', async () => {
+              if (button.disabled) return;
+              button.disabled = true;
+              button.textContent = '…';
+              try {
+                await refreshData();
+                await loadCumulativeSavings();
+              } catch (error) {
+                showNotice('Aggiornamento non riuscito: ' + (error?.message || error), 'error');
+              } finally {
+                button.textContent = '↻';
+                button.disabled = false;
+              }
+            });
+          }
+
+          """
+          if "function ensureCumulativeSavingsTile()" not in app:
+              render_anchor = "  function renderDashboard() {"
+              if app.count(render_anchor) != 1:
+                  raise SystemExit("Funzione renderDashboard non trovata in modo univoco")
+              app = app.replace(render_anchor, dashboard_patch + render_anchor, 1)
+              app = app.replace(render_anchor, render_anchor + "\n    ensureManualRefreshButton();\n    ensureCumulativeSavingsTile();\n    loadCumulativeSavings();", 1)
+          if "statCumulativeSavings" not in app:
+              raise SystemExit("Verifica tile risparmio cumulato fallita")
+          if "manualRefreshBtn" not in app:
+              raise SystemExit("Verifica pulsante aggiornamento fallita")
+
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
@@ -534,7 +637,7 @@ jobs:
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.15", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.16", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
