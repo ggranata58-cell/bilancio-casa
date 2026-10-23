@@ -362,6 +362,8 @@ jobs:
           html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.5 · sincronizzazione cloud protetta')
           html = html.replace('<input id="periodMonth" type="month" aria-label="Mese da consultare">', '<select id="periodMonth" aria-label="Mese da consultare"></select>')
           html = html.replace('.month-picker input{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}', '.month-picker input,.month-picker select{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}')
+          html = html.replace('.dashboard-heading{align-items:flex-end}', '.dashboard-heading{align-items:center;justify-content:flex-start}.dashboard-heading .month-picker{margin-left:16px}')
+          html = html.replace('.dashboard-heading{align-items:flex-start;flex-direction:column}.month-picker{max-width:220px;width:100%}', '.dashboard-heading{align-items:flex-start;flex-direction:column}.dashboard-heading .month-picker{margin-left:0}.month-picker{max-width:220px;width:100%}')
           archive_script = r"""<script>
           (() => {
             const SIZE=10, states=new WeakMap();
