@@ -267,10 +267,6 @@ replace_once(
 "    $('statTaxReserveCaption').textContent = `Accantonamento per ${s.dayCount} giorni`; ",
 "    $('statTaxReserveCaption').textContent = `Accantonamento per ${s.dayCount} giorni`; \n    renderCashPanel();",
 "render cash summary")
-replace_once(
-"    $('exportBtn').addEventListener('click', exportCsv);",
-"    $('exportBtn').addEventListener('click', exportCsv);\n    document.addEventListener('click', event => { if (event.target.closest('#saveCashBalanceBtn')) saveCashBalance(); });",
-"cash balance save action")
 
 replace_once(
 "    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro'\n  ];\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';",
