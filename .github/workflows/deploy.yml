@@ -278,12 +278,13 @@ jobs:
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
           refresh_button_patch = r"""
-          // Icona Aggiorna integrata nella scheda Risparmio del mese: scorre con la pagina.
+          // Icona Aggiorna accanto al titolo del riepilogo, nel normale flusso della pagina.
           function ensureManualRefreshButton() {
-            const value = document.getElementById('statMonthlySavings');
-            const card = value && value.closest('.stat-card');
-            const label = card && card.querySelector('.stat-label');
-            if (!label) return;
+            const headings = [...document.querySelectorAll('h1,h2,h3,h4')];
+            const normalize = el => (el.textContent || '').replace(/\\s+/g, ' ').trim();
+            const heading = headings.find(el => normalize(el) === 'Il tuo Riepilogo')
+              || headings.find(el => normalize(el) === 'SITUAZIONE DEL TUO CONTO');
+            if (!heading) return;
             let button = document.getElementById('manualRefreshBtn');
             if (!button) {
               button = document.createElement('button');
@@ -293,8 +294,11 @@ jobs:
               button.title = 'Aggiorna i dati';
               button.setAttribute('aria-label', 'Aggiorna i dati');
             }
-            if (button.parentElement !== label) label.appendChild(button);
-            label.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
+            if (button.parentElement !== heading) heading.appendChild(button);
+            heading.style.display = 'flex';
+            heading.style.alignItems = 'center';
+            heading.style.justifyContent = 'space-between';
+            heading.style.gap = '10px';
             button.style.cssText = 'position:static!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 30px!important;width:30px!important;min-width:30px!important;height:30px!important;padding:0!important;margin:0 0 0 8px!important;border-radius:50%!important;font-size:22px!important;font-weight:700!important;line-height:1!important;cursor:pointer!important;color:#075eaa!important;background:transparent!important;border:1px solid currentColor!important;box-shadow:none!important;float:none!important;z-index:auto!important';
             if (button.dataset.refreshBound !== '1') {
               button.dataset.refreshBound = '1';
@@ -314,7 +318,7 @@ jobs:
             }
           }
           """
-          # Inserisce il pulsante Aggiorna senza modificare l'intestazione o il selettore del mese.
+          # Inserisce il pulsante accanto al titolo, senza intervenire sui dati o sui calcoli.
           render_anchor = "  function renderDashboard() {"
           if app.count(render_anchor) != 1:
               raise SystemExit("Funzione renderDashboard non trovata in modo univoco")
@@ -681,7 +685,7 @@ jobs:
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.23", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.24", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
