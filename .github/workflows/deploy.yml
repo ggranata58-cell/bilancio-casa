@@ -351,7 +351,8 @@ jobs:
           savings_anchor = """    const cutoff = dayCount === 0 ? '0000-00-00' : finalDate;
               const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
           savings_patch = """    const cutoff = dayCount === 0 ? '0000-00-00' : finalDate;
-              const monthlySavings = Math.round((budgetAllocated - expenses + Number.EPSILON) * 100) / 100;
+              const cashWithdrawals = rows.filter(m => m.movement_date <= cutoff && m.movement_type === 'Uscita' && m.category === 'Prelievo contanti').reduce((s, m) => s + m.amount, 0);
+              const monthlySavings = Math.round((budgetAllocated - expenses - cashWithdrawals + Number.EPSILON) * 100) / 100;
               const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
           if "const monthlySavings =" not in app:
               if savings_anchor not in app:
