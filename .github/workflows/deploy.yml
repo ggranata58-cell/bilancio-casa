@@ -278,13 +278,17 @@ jobs:
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
           refresh_button_patch = r"""
-          // Icona Aggiorna accanto al titolo del riepilogo, nel normale flusso della pagina.
+          // Colloca l'icona accanto al titolo del riepilogo; se il titolo non è riconosciuto,
+          // ripiega sulla posizione precedente, già verificata e visibile.
           function ensureManualRefreshButton() {
-            const headings = [...document.querySelectorAll('h1,h2,h3,h4')];
             const normalize = el => (el.textContent || '').replace(/\s+/g, ' ').trim();
+            const headings = [...document.querySelectorAll('h1,h2,h3,h4')];
             const heading = headings.find(el => normalize(el) === 'Il tuo Riepilogo')
               || headings.find(el => normalize(el) === 'SITUAZIONE DEL TUO CONTO');
-            if (!heading) return;
+            const value = document.getElementById('statMonthlySavings');
+            const fallbackLabel = value && value.closest('.stat-card')?.querySelector('.stat-label');
+            const target = heading || fallbackLabel;
+            if (!target) return;
             let button = document.getElementById('manualRefreshBtn');
             if (!button) {
               button = document.createElement('button');
@@ -294,11 +298,11 @@ jobs:
               button.title = 'Aggiorna i dati';
               button.setAttribute('aria-label', 'Aggiorna i dati');
             }
-            if (button.parentElement !== heading) heading.appendChild(button);
-            heading.style.display = 'flex';
-            heading.style.alignItems = 'center';
-            heading.style.justifyContent = 'space-between';
-            heading.style.gap = '10px';
+            if (button.parentElement !== target) target.appendChild(button);
+            target.style.display = 'flex';
+            target.style.alignItems = 'center';
+            target.style.justifyContent = 'space-between';
+            target.style.gap = '8px';
             button.style.cssText = 'position:static!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 30px!important;width:30px!important;min-width:30px!important;height:30px!important;padding:0!important;margin:0 0 0 8px!important;border-radius:50%!important;font-size:22px!important;font-weight:700!important;line-height:1!important;cursor:pointer!important;color:#075eaa!important;background:transparent!important;border:1px solid currentColor!important;box-shadow:none!important;float:none!important;z-index:auto!important';
             if (button.dataset.refreshBound !== '1') {
               button.dataset.refreshBound = '1';
@@ -685,7 +689,7 @@ jobs:
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.24", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.25", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
