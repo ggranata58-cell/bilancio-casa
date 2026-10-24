@@ -346,17 +346,12 @@ jobs:
           app = app.replace(init_anchor, init_anchor + "\n    populateMonthOptions();", 1)
           if "function ensureManualRefreshButton()" not in app or "ensureManualRefreshButton();" not in app:
               raise SystemExit("Verifica pulsante Aggiorna fallita")
-          # Nuovo risparmio mensile distinto dal residuo del budget.
-          # Formula del bilancio: entrate meno uscite, conteggiate fino alla data di consultazione.
+          # Risparmio del mese come nel Riepilogo giornaliero Excel:
+          # quota giornaliera maturata (budgetAllocated) meno spese conteggiate nel mese.
           savings_anchor = """    const cutoff = dayCount === 0 ? '0000-00-00' : finalDate;
               const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
           savings_patch = """    const cutoff = dayCount === 0 ? '0000-00-00' : finalDate;
-              const savingsRows = dayCount === 0 ? [] : rows.filter(m => m.movement_date <= cutoff);
-              const savingsIncome = savingsRows.filter(m => m.movement_type === 'Entrata').reduce((s, m) => s + m.amount, 0);
-              const savingsOutflows = savingsRows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);
-              const savingsInterestCredits = savingsRows.filter(m => m.movement_type === 'Entrata' && m.category === 'Interessi attivi').reduce((s, m) => s + m.amount, 0);
-              const savingsExpenses = Math.round((savingsOutflows - savingsInterestCredits + Number.EPSILON) * 100) / 100;
-              const monthlySavings = Math.round((savingsIncome - savingsExpenses + Number.EPSILON) * 100) / 100;
+              const monthlySavings = Math.round((budgetAllocated - expenses + Number.EPSILON) * 100) / 100;
               const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
           if "const monthlySavings =" not in app:
               if savings_anchor not in app:
