@@ -281,7 +281,7 @@ jobs:
           // Icona Aggiorna accanto al titolo del riepilogo, nel normale flusso della pagina.
           function ensureManualRefreshButton() {
             const headings = [...document.querySelectorAll('h1,h2,h3,h4')];
-            const normalize = el => (el.textContent || '').replace(/\\s+/g, ' ').trim();
+            const normalize = el => (el.textContent || '').replace(/\s+/g, ' ').trim();
             const heading = headings.find(el => normalize(el) === 'Il tuo Riepilogo')
               || headings.find(el => normalize(el) === 'SITUAZIONE DEL TUO CONTO');
             if (!heading) return;
