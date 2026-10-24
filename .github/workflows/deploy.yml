@@ -349,15 +349,15 @@ jobs:
           # Nuovo risparmio mensile distinto dal residuo del budget.
           # Formula del bilancio: entrate meno uscite, conteggiate fino alla data di consultazione.
           savings_anchor = """    const cutoff = dayCount === 0 ? '0000-00-00' : finalDate;
-    const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
+              const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
           savings_patch = """    const cutoff = dayCount === 0 ? '0000-00-00' : finalDate;
-    const savingsRows = dayCount === 0 ? [] : rows.filter(m => m.movement_date <= cutoff);
-    const savingsIncome = savingsRows.filter(m => m.movement_type === 'Entrata').reduce((s, m) => s + m.amount, 0);
-    const savingsOutflows = savingsRows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);
-    const savingsInterestCredits = savingsRows.filter(m => m.movement_type === 'Entrata' && m.category === 'Interessi attivi').reduce((s, m) => s + m.amount, 0);
-    const savingsExpenses = Math.round((savingsOutflows - savingsInterestCredits + Number.EPSILON) * 100) / 100;
-    const monthlySavings = Math.round((savingsIncome - savingsExpenses + Number.EPSILON) * 100) / 100;
-    const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
+              const savingsRows = dayCount === 0 ? [] : rows.filter(m => m.movement_date <= cutoff);
+              const savingsIncome = savingsRows.filter(m => m.movement_type === 'Entrata').reduce((s, m) => s + m.amount, 0);
+              const savingsOutflows = savingsRows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);
+              const savingsInterestCredits = savingsRows.filter(m => m.movement_type === 'Entrata' && m.category === 'Interessi attivi').reduce((s, m) => s + m.amount, 0);
+              const savingsExpenses = Math.round((savingsOutflows - savingsInterestCredits + Number.EPSILON) * 100) / 100;
+              const monthlySavings = Math.round((savingsIncome - savingsExpenses + Number.EPSILON) * 100) / 100;
+              const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
           if "const monthlySavings =" not in app:
               if savings_anchor not in app:
                   raise SystemExit("Punto di calcolo per il nuovo risparmio non trovato")
@@ -368,12 +368,12 @@ jobs:
                   raise SystemExit("Ritorno monthlyStats non trovato per il nuovo risparmio")
               app = app.replace(old_return, new_return, 1)
           savings_render_anchor = """    $('statSavingsCaption').textContent = `${money(s.budgetAllocated)} di quote giornaliere − uscite`;
-    $('statTaxReserve').textContent = money(s.taxReserve);"""
+              $('statTaxReserve').textContent = money(s.taxReserve);"""
           savings_render_patch = """    $('statSavingsCaption').textContent = `${money(s.budgetAllocated)} di quote giornaliere − uscite`;
-    $('statMonthlySavings').textContent = money(s.monthlySavings);
-    $('statMonthlySavings').classList.toggle('amount-out', s.monthlySavings < 0);
-    $('statMonthlySavingsCaption').textContent = s.dayCount === 0 ? 'Nessun giorno contabilizzato' : `Entrate − uscite fino al ${fmtDate(s.finalDate)}`;
-    $('statTaxReserve').textContent = money(s.taxReserve);"""
+              $('statMonthlySavings').textContent = money(s.monthlySavings);
+              $('statMonthlySavings').classList.toggle('amount-out', s.monthlySavings < 0);
+              $('statMonthlySavingsCaption').textContent = s.dayCount === 0 ? 'Nessun giorno contabilizzato' : `Entrate − uscite fino al ${fmtDate(s.finalDate)}`;
+              $('statTaxReserve').textContent = money(s.taxReserve);"""
           if "$('statMonthlySavings')" not in app:
               if savings_render_anchor not in app:
                   raise SystemExit("Punto di visualizzazione dashboard non trovato")
@@ -654,10 +654,10 @@ jobs:
 
           # Aggiunge una scheda nuova, distinta da "Residuo del budget".
           savings_card_marker = """          <article class="stat-card">
-            <span class="stat-label">Residuo del budget</span>
-            <strong id="statSavings">—</strong>
-            <span id="statSavingsCaption" class="stat-caption">Quota giornaliera × giorni − uscite</span>
-          </article>"""
+                      <span class="stat-label">Residuo del budget</span>
+                      <strong id="statSavings">—</strong>
+                      <span id="statSavingsCaption" class="stat-caption">Quota giornaliera × giorni − uscite</span>
+                    </article>"""
           savings_card = savings_card_marker + """\n          <article class="stat-card">
             <span class="stat-label">Risparmio del mese</span>
             <strong id="statMonthlySavings">—</strong>
