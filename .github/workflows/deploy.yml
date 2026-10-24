@@ -283,11 +283,12 @@ jobs:
           function ensureManualRefreshButton() {
             const normalize = el => (el.textContent || '').replace(/\s+/g, ' ').trim();
             const headings = [...document.querySelectorAll('h1,h2,h3,h4')];
+            const dedicatedLabel = document.getElementById('refreshCardLabel');
             const heading = headings.find(el => normalize(el) === 'Il tuo Riepilogo')
               || headings.find(el => normalize(el) === 'SITUAZIONE DEL TUO CONTO');
             const value = document.getElementById('statMonthlySavings');
             const fallbackLabel = value && value.closest('.stat-card')?.querySelector('.stat-label');
-            const target = heading || fallbackLabel;
+            const target = dedicatedLabel || heading || fallbackLabel;
             if (!target) return;
             let button = document.getElementById('manualRefreshBtn');
             if (!button) {
@@ -670,6 +671,10 @@ jobs:
             <span class="stat-label">Risparmio del mese</span>
             <strong id="statMonthlySavings">—</strong>
             <span id="statMonthlySavingsCaption" class="stat-caption">Entrate − uscite alla data di consultazione</span>
+          </article>
+          <article class="stat-card" id="refreshActionCard">
+            <span class="stat-label" id="refreshCardLabel">Aggiorna dati</span>
+            <span class="stat-caption">Sincronizza il riepilogo</span>
           </article>"""
           if 'id="statMonthlySavings"' not in html:
               if savings_card_marker not in html:
@@ -689,7 +694,7 @@ jobs:
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.25", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.26", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
