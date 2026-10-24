@@ -674,7 +674,6 @@ jobs:
           </article>
           <article class="stat-card" id="refreshActionCard">
             <span class="stat-label" id="refreshCardLabel">Aggiorna dati</span>
-            <span class="stat-caption">Sincronizza il riepilogo</span>
           </article>"""
           if 'id="statMonthlySavings"' not in html:
               if savings_card_marker not in html:
