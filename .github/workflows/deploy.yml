@@ -673,7 +673,7 @@ jobs:
           </script>"""
           if 'getElementById(\'statSavings\')' not in html:
               html = html.replace('</body>', hide_budget_card + '\\n</body>', 1)
-                    html_path.write_text(html, encoding="utf-8")
+          html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
