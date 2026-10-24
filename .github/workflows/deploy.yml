@@ -663,11 +663,21 @@ jobs:
               if savings_card_marker not in html:
                   raise SystemExit("Scheda Residuo del budget non trovata per aggiungere il risparmio")
               html = html.replace(savings_card_marker, savings_card, 1)
-          html_path.write_text(html, encoding="utf-8")
+          # Nasconde il riquadro Residuo del budget, mantenendo intatto il calcolo separato.
+          hide_budget_card = """<script>
+          document.addEventListener('DOMContentLoaded', () => {
+            const value = document.getElementById('statSavings');
+            const card = value && value.closest('.stat-card');
+            if (card) card.style.display = 'none';
+          }, { once: true });
+          </script>"""
+          if 'getElementById(\'statSavings\')' not in html:
+              html = html.replace('</body>', hide_budget_card + '\\n</body>', 1)
+                    html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.21", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.22", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
