@@ -346,6 +346,38 @@ jobs:
           app = app.replace(init_anchor, init_anchor + "\n    populateMonthOptions();", 1)
           if "function ensureManualRefreshButton()" not in app or "ensureManualRefreshButton();" not in app:
               raise SystemExit("Verifica pulsante Aggiorna fallita")
+          # Nuovo risparmio mensile distinto dal residuo del budget.
+          # Formula del bilancio: entrate meno uscite, conteggiate fino alla data di consultazione.
+          savings_anchor = """    const cutoff = dayCount === 0 ? '0000-00-00' : finalDate;
+    const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
+          savings_patch = """    const cutoff = dayCount === 0 ? '0000-00-00' : finalDate;
+    const savingsRows = dayCount === 0 ? [] : rows.filter(m => m.movement_date <= cutoff);
+    const savingsIncome = savingsRows.filter(m => m.movement_type === 'Entrata').reduce((s, m) => s + m.amount, 0);
+    const savingsOutflows = savingsRows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);
+    const savingsInterestCredits = savingsRows.filter(m => m.movement_type === 'Entrata' && m.category === 'Interessi attivi').reduce((s, m) => s + m.amount, 0);
+    const savingsExpenses = Math.round((savingsOutflows - savingsInterestCredits + Number.EPSILON) * 100) / 100;
+    const monthlySavings = Math.round((savingsIncome - savingsExpenses + Number.EPSILON) * 100) / 100;
+    const monthSigned = rows.filter(m => m.movement_date <= cutoff).reduce((s, m) => s + signed(m), 0);"""
+          if "const monthlySavings =" not in app:
+              if savings_anchor not in app:
+                  raise SystemExit("Punto di calcolo per il nuovo risparmio non trovato")
+              app = app.replace(savings_anchor, savings_patch, 1)
+              old_return = "return { ym, rows, income, expenses, excludedOutflows, budgetAllocated, taxReserve, budgetRemainder, monthOpen, closing, dayCount };"
+              new_return = "return { ym, rows, income, expenses, excludedOutflows, budgetAllocated, taxReserve, budgetRemainder, monthlySavings, monthOpen, closing, dayCount, finalDate };"
+              if old_return not in app:
+                  raise SystemExit("Ritorno monthlyStats non trovato per il nuovo risparmio")
+              app = app.replace(old_return, new_return, 1)
+          savings_render_anchor = """    $('statSavingsCaption').textContent = `${money(s.budgetAllocated)} di quote giornaliere − uscite`;
+    $('statTaxReserve').textContent = money(s.taxReserve);"""
+          savings_render_patch = """    $('statSavingsCaption').textContent = `${money(s.budgetAllocated)} di quote giornaliere − uscite`;
+    $('statMonthlySavings').textContent = money(s.monthlySavings);
+    $('statMonthlySavings').classList.toggle('amount-out', s.monthlySavings < 0);
+    $('statMonthlySavingsCaption').textContent = s.dayCount === 0 ? 'Nessun giorno contabilizzato' : `Entrate − uscite fino al ${fmtDate(s.finalDate)}`;
+    $('statTaxReserve').textContent = money(s.taxReserve);"""
+          if "$('statMonthlySavings')" not in app:
+              if savings_render_anchor not in app:
+                  raise SystemExit("Punto di visualizzazione dashboard non trovato")
+              app = app.replace(savings_render_anchor, savings_render_patch, 1)
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
@@ -366,6 +398,17 @@ jobs:
           styles = styles.replace(".month-picker input{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}", ".month-picker input,.month-picker select{display:block;width:100%;min-height:40px;background:#fff!important;border:1px solid var(--line);border-radius:10px;padding:8px;color:#18202a!important;opacity:1!important}.month-picker select option{background:#fff!important;color:#18202a!important}")
           styles = styles.replace(".dashboard-heading{align-items:flex-end}", ".dashboard-heading{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:18px!important}.dashboard-heading .month-picker{margin:0!important;flex:0 0 170px!important}")
           styles = styles.replace(".dashboard-heading{align-items:flex-start;flex-direction:column}.month-picker{max-width:220px;width:100%}", ".dashboard-heading{display:flex!important;align-items:flex-start!important;flex-direction:column!important;justify-content:flex-start!important;gap:8px!important}.dashboard-heading .month-picker{margin:0!important;max-width:220px;width:100%}")
+          # Layout della nuova scheda: sei colonne su desktop, tre su tablet, due su telefono.
+          old_stats_grid = ".stats-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:18px}"
+          new_stats_grid = ".stats-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:18px}"
+          if old_stats_grid in styles:
+              styles = styles.replace(old_stats_grid, new_stats_grid, 1)
+          elif new_stats_grid not in styles:
+              raise SystemExit("Regola della griglia riepilogo non trovata")
+          if "@media(max-width:900px){.stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}" not in styles:
+              styles += "\n@media(max-width:900px){.stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}"
+          if "#installBtn{display:none!important}" not in styles:
+              styles += "\n#installBtn{display:none!important}"
           styles_path.write_text(styles, encoding="utf-8")
           archive_script = r"""<script>
           (() => {
@@ -609,11 +652,26 @@ jobs:
           """
           html = html[:panel_start] + new_backup_panel + html[panel_end:]
 
+          # Aggiunge una scheda nuova, distinta da "Residuo del budget".
+          savings_card_marker = """          <article class="stat-card">
+            <span class="stat-label">Residuo del budget</span>
+            <strong id="statSavings">—</strong>
+            <span id="statSavingsCaption" class="stat-caption">Quota giornaliera × giorni − uscite</span>
+          </article>"""
+          savings_card = savings_card_marker + """\n          <article class="stat-card">
+            <span class="stat-label">Risparmio del mese</span>
+            <strong id="statMonthlySavings">—</strong>
+            <span id="statMonthlySavingsCaption" class="stat-caption">Entrate − uscite alla data di consultazione</span>
+          </article>"""
+          if 'id="statMonthlySavings"' not in html:
+              if savings_card_marker not in html:
+                  raise SystemExit("Scheda Residuo del budget non trovata per aggiungere il risparmio")
+              html = html.replace(savings_card_marker, savings_card, 1)
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.20", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.21", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
