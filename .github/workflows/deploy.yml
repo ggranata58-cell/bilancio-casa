@@ -278,36 +278,40 @@ jobs:
           app = app.replace("  async function initialize() {", "  $('backupCreateBtn')?.addEventListener('click', createFullBackup);\n  $('backupRestoreBtn')?.addEventListener('click', () => $('backupRestoreFile')?.click());\n  $('backupRestoreFile')?.addEventListener('change', event => restoreFullBackup(event.target.files?.[0]));\n\n  async function initialize() {", 1)
 
           refresh_button_patch = r"""
-          // Pulsante Aggiorna ben visibile, indipendente dal layout del riepilogo.
+          // Icona Aggiorna integrata nella scheda Risparmio del mese: scorre con la pagina.
           function ensureManualRefreshButton() {
+            const value = document.getElementById('statMonthlySavings');
+            const card = value && value.closest('.stat-card');
+            const label = card && card.querySelector('.stat-label');
+            if (!label) return;
             let button = document.getElementById('manualRefreshBtn');
             if (!button) {
               button = document.createElement('button');
               button.id = 'manualRefreshBtn';
               button.type = 'button';
-              button.textContent = '↻ AGGIORNA';
+              button.textContent = '↻';
               button.title = 'Aggiorna i dati';
               button.setAttribute('aria-label', 'Aggiorna i dati');
-              document.body.appendChild(button);
             }
-            button.style.cssText = 'position:fixed!important;bottom:18px!important;right:18px!important;top:auto!important;left:auto!important;z-index:2147483647!important;display:block!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;width:auto!important;min-width:140px!important;height:46px!important;padding:0 16px!important;border-radius:24px!important;font-size:16px!important;font-weight:800!important;line-height:1!important;cursor:pointer!important;color:#fff!important;background:#075eaa!important;border:2px solid #fff!important;box-shadow:0 4px 14px #0008!important;float:none!important';
+            if (button.parentElement !== label) label.appendChild(button);
+            label.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
+            button.style.cssText = 'position:static!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 30px!important;width:30px!important;min-width:30px!important;height:30px!important;padding:0!important;margin:0 0 0 8px!important;border-radius:50%!important;font-size:22px!important;font-weight:700!important;line-height:1!important;cursor:pointer!important;color:#075eaa!important;background:transparent!important;border:1px solid currentColor!important;box-shadow:none!important;float:none!important;z-index:auto!important';
             if (button.dataset.refreshBound !== '1') {
               button.dataset.refreshBound = '1';
               button.addEventListener('click', async () => {
                 if (button.disabled) return;
                 button.disabled = true;
-                button.textContent = 'Aggiorno…';
+                button.textContent = '…';
                 try { await refreshData(); }
                 catch (error) {
                   console.error('Aggiornamento manuale non riuscito:', error);
                   window.alert('Aggiornamento non riuscito. Riprova tra poco.');
                 } finally {
-                  button.textContent = '↻ AGGIORNA';
+                  button.textContent = '↻';
                   button.disabled = false;
                 }
               });
             }
-            if (button.parentElement !== document.body) document.body.appendChild(button);
           }
           """
           # Inserisce il pulsante Aggiorna senza modificare l'intestazione o il selettore del mese.
@@ -677,7 +681,7 @@ jobs:
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.22", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.23", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
