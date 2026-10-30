@@ -291,7 +291,7 @@ if "else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi')
     loop_start = app.find("for (const m of rows) {")
     if loop_start < 0:
         raise SystemExit("Category summary loop not found.")
-    loop_end = app.find("\\n    }", loop_start)
+    loop_end = app.find("\n    }", loop_start)
     if loop_end < 0:
         raise SystemExit("Category summary loop end not found.")
     loop_text = app[loop_start:loop_end + len("\\n    }")]
