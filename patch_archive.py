@@ -288,13 +288,21 @@ replace_once(
 # Robust fallback: older archive revisions may have a slightly different
 # category-loop body, so replace the loop by its role rather than exact text.
 if "else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi')" not in app:
-    loop_start = app.find("for (const m of rows) {")
+    search_from = 0
+    loop_start = loop_end = -1
+    while True:
+        candidate = app.find("for (const m of rows) {", search_from)
+        if candidate < 0:
+            break
+        candidate_end = app.find("\n    }", candidate)
+        if candidate_end >= 0:
+            candidate_text = app[candidate:candidate_end + len("\n    }")]
+            if "SPECIAL_CATEGORY" in candidate_text and "totals.set" in candidate_text:
+                loop_start, loop_end = candidate, candidate_end
+                break
+        search_from = candidate + 1
     if loop_start < 0:
-        raise SystemExit("Category summary loop not found.")
-    loop_end = app.find("\n    }", loop_start)
-    if loop_end < 0:
-        raise SystemExit("Category summary loop end not found.")
-    loop_text = app[loop_start:loop_end + len("\\n    }")]
+        raise SystemExit("Category summary loop not found safely.")
     if "SPECIAL_CATEGORY" not in loop_text or "totals.set" not in loop_text:
         raise SystemExit("Located loop is not the category summary loop; refusing unsafe patch.")
     replacement_loop = """for (const m of rows) {
