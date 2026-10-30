@@ -338,10 +338,17 @@ try:
         patched = check.read(target).decode("utf-8")
         if "withStableId" not in patched or "ID movimento" not in patched:
             raise SystemExit("Patch verification failed.")
-        category_loop = """else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi') {
-        totals.set(m.category, (totals.get(m.category) || 0) - m.amount);"""
-        if category_loop not in patched:
-            raise SystemExit("Category summary verification failed: interest credits are missing.")
+        category_loop_ok = False
+        for match in re.finditer(r"for \\(const m of rows\\) \\{", patched):
+            end = patched.find("\\n    }", match.start())
+            if end < 0:
+                continue
+            snippet = patched[match.start():end]
+            if "SPECIAL_CATEGORY" in snippet and "totals.set" in snippet and "m.category === 'Interessi attivi'" in snippet:
+                category_loop_ok = True
+                break
+        if not category_loop_ok:
+            raise SystemExit("Category summary verification failed: interest credits are not in the category aggregation loop.")
         for required in ["function renderCashPanel()", "cashBalanceInput", "cashMonthWithdrawals", "cashTotalWithdrawals", "localStorage.setItem(cashBalanceKey()", "renderCashPanel();"]:
             if required not in patched:
                 raise SystemExit(f"Cash summary patch verification failed: {required}")
