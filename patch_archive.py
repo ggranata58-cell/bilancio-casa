@@ -285,27 +285,25 @@ replace_once(
 "    for (const m of rows) {\n      // I movimenti esclusi e i prelievi restano nell'archivio, ma non\n      // devono comparire nel riepilogo delle spese per categoria.\n      if (isExcludedMovement(m)) continue;\n      if (m.category === SPECIAL_CATEGORY) {\n        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));\n      } else if (m.movement_type === 'Uscita') {\n        totals.set(m.category, (totals.get(m.category) || 0) + m.amount);\n      } else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi') {\n        totals.set(m.category, (totals.get(m.category) || 0) - m.amount);\n      }\n    }",
 "separate category totals")
 
-# Robust fallback: older archive revisions may have a slightly different
-# category-loop body, so replace the loop by its role rather than exact text.
-if "else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi')" not in app:
-    search_from = 0
-    loop_start = loop_end = -1
-    while True:
-        candidate = app.find("for (const m of rows) {", search_from)
-        if candidate < 0:
+# Always patch the category aggregation loop itself.
+search_from = 0
+category_loop_start = category_loop_end = -1
+category_loop_text = ''
+while True:
+    candidate = app.find("for (const m of rows) {", search_from)
+    if candidate < 0:
+        break
+    candidate_end = app.find("\n    }", candidate)
+    if candidate_end >= 0:
+        candidate_text = app[candidate:candidate_end + len("\n    }")]
+        if "SPECIAL_CATEGORY" in candidate_text and "totals.set" in candidate_text:
+            category_loop_start, category_loop_end = candidate, candidate_end
+            category_loop_text = candidate_text
             break
-        candidate_end = app.find("\n    }", candidate)
-        if candidate_end >= 0:
-            candidate_text = app[candidate:candidate_end + len("\n    }")]
-            if "SPECIAL_CATEGORY" in candidate_text and "totals.set" in candidate_text:
-                loop_start, loop_end = candidate, candidate_end
-                break
-        search_from = candidate + 1
-    if loop_start < 0:
-        raise SystemExit("Category summary loop not found safely.")
-    loop_text = app[loop_start:loop_end + len("\n    }")]
-    if "SPECIAL_CATEGORY" not in loop_text or "totals.set" not in loop_text:
-        raise SystemExit("Located loop is not the category summary loop; refusing unsafe patch.")
+    search_from = candidate + 1
+if category_loop_start < 0:
+    raise SystemExit("Category summary loop not found safely.")
+if "m.category === 'Interessi attivi'" not in category_loop_text:
     replacement_loop = """for (const m of rows) {
       if (isExcludedMovement(m)) continue;
       if (m.category === SPECIAL_CATEGORY) {
@@ -316,7 +314,7 @@ if "else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi')
         totals.set(m.category, (totals.get(m.category) || 0) - m.amount);
       }
     }"""
-    app = app[:loop_start] + replacement_loop + app[loop_end + len("\n    }"): ]
+    app = app[:category_loop_start] + replacement_loop + app[category_loop_end + len("\n    }"): ]
 replace_once(
 "    $('statExpenses').textContent = money(s.expenses);",
 "    $('statExpenses').textContent = money(s.expenses);\n    $('statExpenses').title = `Spese ordinarie: ${money(s.expenses)}. Uscite escluse dal budget: ${money(s.excludedOutflows)}.`;",
