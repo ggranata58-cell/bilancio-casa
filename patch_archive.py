@@ -284,6 +284,30 @@ replace_once(
 "    for (const m of rows) {\n      // I movimenti esclusi e i prelievi restano nell'archivio, ma non\n      // devono comparire nel riepilogo delle spese per categoria.\n      if (isExcludedMovement(m)) continue;\n      if (m.category === SPECIAL_CATEGORY) {\n        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));\n      } else if (m.movement_type === 'Uscita') {\n        totals.set(m.category, (totals.get(m.category) || 0) + m.amount);\n      }\n    }",
 "    for (const m of rows) {\n      // I movimenti esclusi e i prelievi restano nell'archivio, ma non\n      // devono comparire nel riepilogo delle spese per categoria.\n      if (isExcludedMovement(m)) continue;\n      if (m.category === SPECIAL_CATEGORY) {\n        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));\n      } else if (m.movement_type === 'Uscita') {\n        totals.set(m.category, (totals.get(m.category) || 0) + m.amount);\n      } else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi') {\n        totals.set(m.category, (totals.get(m.category) || 0) - m.amount);\n      }\n    }",
 "separate category totals")
+
+# Robust fallback: older archive revisions may have a slightly different
+# category-loop body, so replace the loop by its role rather than exact text.
+if "else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi')" not in app:
+    loop_start = app.find("for (const m of rows) {")
+    if loop_start < 0:
+        raise SystemExit("Category summary loop not found.")
+    loop_end = app.find("\\n    }", loop_start)
+    if loop_end < 0:
+        raise SystemExit("Category summary loop end not found.")
+    loop_text = app[loop_start:loop_end + len("\\n    }")]
+    if "SPECIAL_CATEGORY" not in loop_text or "totals.set" not in loop_text:
+        raise SystemExit("Located loop is not the category summary loop; refusing unsafe patch.")
+    replacement_loop = """for (const m of rows) {
+      if (isExcludedMovement(m)) continue;
+      if (m.category === SPECIAL_CATEGORY) {
+        totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));
+      } else if (m.movement_type === 'Uscita') {
+        totals.set(m.category, (totals.get(m.category) || 0) + m.amount);
+      } else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi') {
+        totals.set(m.category, (totals.get(m.category) || 0) - m.amount);
+      }
+    }"""
+    app = app[:loop_start] + replacement_loop + app[loop_end + len("\\n    }"):]
 replace_once(
 "    $('statExpenses').textContent = money(s.expenses);",
 "    $('statExpenses').textContent = money(s.expenses);\n    $('statExpenses').title = `Spese ordinarie: ${money(s.expenses)}. Uscite escluse dal budget: ${money(s.excludedOutflows)}.`;",
