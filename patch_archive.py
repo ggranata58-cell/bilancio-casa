@@ -303,6 +303,7 @@ if "else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi')
         search_from = candidate + 1
     if loop_start < 0:
         raise SystemExit("Category summary loop not found safely.")
+    loop_text = app[loop_start:loop_end + len("\n    }")]
     if "SPECIAL_CATEGORY" not in loop_text or "totals.set" not in loop_text:
         raise SystemExit("Located loop is not the category summary loop; refusing unsafe patch.")
     replacement_loop = """for (const m of rows) {
@@ -315,7 +316,7 @@ if "else if (m.movement_type === 'Entrata' && m.category === 'Interessi attivi')
         totals.set(m.category, (totals.get(m.category) || 0) - m.amount);
       }
     }"""
-    app = app[:loop_start] + replacement_loop + app[loop_end + len("\\n    }"):]
+    app = app[:loop_start] + replacement_loop + app[loop_end + len("\n    }"): ]
 replace_once(
 "    $('statExpenses').textContent = money(s.expenses);",
 "    $('statExpenses').textContent = money(s.expenses);\n    $('statExpenses').title = `Spese ordinarie: ${money(s.expenses)}. Uscite escluse dal budget: ${money(s.excludedOutflows)}.`;",
