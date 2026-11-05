@@ -174,7 +174,7 @@ jobs:
           # Gestione recupero password Supabase.
           recovery_state = "  let authMode = 'signin';"
           if recovery_state in app and "let passwordRecoveryActive = false;" not in app:
-              app = app.replace(recovery_state, recovery_state + "\\n  let passwordRecoveryActive = false;", 1)
+              app = app.replace(recovery_state, recovery_state + "\n  let passwordRecoveryActive = false;", 1)
           recovery_functions = r"""
             function showPasswordRecoveryForm() {
               authMode = 'recovery';
@@ -213,7 +213,7 @@ jobs:
           if "function showPasswordRecoveryForm()" not in app:
               anchor = "  function switchAuthMode(mode) {"
               if anchor not in app: raise SystemExit("Punto di inserimento recupero password non trovato")
-              app = app.replace(anchor, recovery_functions + "\\n" + anchor, 1)
+              app = app.replace(anchor, recovery_functions + "\n" + anchor, 1)
 
           recovery_branch = """              if (authMode === 'recovery') {
                   if (password.length < 8) throw new Error('La password deve contenere almeno 8 caratteri.');
@@ -233,10 +233,10 @@ jobs:
           reset_binding = "    $('authResendBtn').addEventListener('click', resendConfirmationEmail);"
           if "$('authResetBtn').addEventListener" not in app:
               if reset_binding not in app: raise SystemExit("Punto di associazione recupero password non trovato")
-              app = app.replace(reset_binding, reset_binding + "\\n    $('authResetBtn').addEventListener('click', requestPasswordReset);", 1)
+              app = app.replace(reset_binding, reset_binding + "\n    $('authResetBtn').addEventListener('click', requestPasswordReset);", 1)
 
           signin_anchor = "    const signup = mode === 'signup';"
-          signin_patch = signin_anchor + "\\n    if ($('authResetBtn')) $('authResetBtn').hidden = signup;\\n    if ($('authResendBtn')) $('authResendBtn').hidden = signup;"
+          signin_patch = signin_anchor + "\n    if ($('authResetBtn')) $('authResetBtn').hidden = signup;\n    if ($('authResendBtn')) $('authResendBtn').hidden = signup;"
           if "if ($('authResetBtn')) $('authResetBtn').hidden = signup;" not in app:
               if app.count(signin_anchor) != 1: raise SystemExit("Modalità accesso/registrazione non trovata")
               app = app.replace(signin_anchor, signin_patch, 1)
@@ -520,7 +520,7 @@ jobs:
           if 'id="authResetBtn"' not in html:
               if marker not in html:
                   raise SystemExit("Area messaggi di autenticazione non trovata per il recupero password")
-              html = html.replace(marker, marker + '\\n      <button id="authResetBtn" class="text-button" type="button">Password dimenticata?</button>', 1)
+              html = html.replace(marker, marker + '\n      <button id="authResetBtn" class="text-button" type="button">Password dimenticata?</button>', 1)
           html = html.replace('Bilancio Casa · versione 0.2.2 · sincronizzazione cloud protetta', 'Bilancio Casa · versione 0.2.5 · sincronizzazione cloud protetta')
           html = html.replace('<input id="periodMonth" type="month" aria-label="Mese da consultare">', '<select id="periodMonth" aria-label="Mese da consultare"></select>')
           html = html.replace('.month-picker input{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}', '.month-picker input,.month-picker select{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink)}')
@@ -812,7 +812,7 @@ jobs:
           }, { once: true });
           </script>"""
           if 'getElementById(\'statSavings\')' not in html:
-              html = html.replace('</body>', hide_budget_card + '\\n</body>', 1)
+              html = html.replace('</body>', hide_budget_card + '\n</body>', 1)
           html_path.write_text(html, encoding="utf-8")
 
           sw_path = root / "service-worker.js"
