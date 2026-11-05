@@ -519,6 +519,22 @@ jobs:
 
           html_path = root / "index.html"
           html = html_path.read_text(encoding="utf-8")
+          # Imposta il bypass PIN prima che lo script di sicurezza, già presente
+          # nell'HTML originale, venga eseguito. La modifica non dipende
+          # dall'iniezione di un secondo overlay.
+          pin_bypass = """<script>
+          (() => {
+            try {
+              if (new URLSearchParams(window.location.search).get('access') === 'login') {
+                localStorage.setItem('bilancioCasa.skipPinAfterLogout.v1', '1');
+              }
+            } catch (_) {}
+          })();
+          </script>"""
+          if 'bilancioCasa.skipPinAfterLogout.v1' not in html:
+              if '</head>' not in html:
+                  raise SystemExit("Tag head non trovato per il bypass PIN")
+              html = html.replace('</head>', pin_bypass + '\\n</head>', 1)
           html = html.replace("xlsx@0.18.12/dist/xlsx.full.min.js", "xlsx@0.18.5/dist/xlsx.full.min.js")
           marker = '<p id="authMessage" class="small-note" role="status" aria-live="polite"></p>'
           if 'id="authResendBtn"' not in html:
