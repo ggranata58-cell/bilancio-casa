@@ -215,7 +215,7 @@ jobs:
               if anchor not in app: raise SystemExit("Punto di inserimento recupero password non trovato")
               app = app.replace(anchor, recovery_functions + "\n" + anchor, 1)
 
-          recovery_branch = """              if (authMode === 'recovery') {
+          recovery_branch = """                if (authMode === 'recovery') {
                   if (password.length < 8) throw new Error('La password deve contenere almeno 8 caratteri.');
                   const { error } = await db.auth.updateUser({ password });
                   if (error) throw error;
@@ -225,7 +225,7 @@ jobs:
                   switchAuthMode('signin');
                   setAuthMessage('Password aggiornata. Ora puoi accedere con la nuova password.');
                 } else if (authMode === 'signup') {"""
-          old_signup_branch = "              if (authMode === 'signup') {"
+          old_signup_branch = "                if (authMode === 'signup') {"
           if recovery_branch not in app:
               if app.count(old_signup_branch) != 1: raise SystemExit("Ramo di accesso non trovato in modo univoco")
               app = app.replace(old_signup_branch, recovery_branch, 1)
