@@ -259,30 +259,36 @@ jobs:
               if app.count(old_get) != 1: raise SystemExit("Inizializzazione sessione non trovata")
               app = app.replace(old_get, new_get, 1)
 
-          old_bottom_listener = """      db.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_OUT' || !session) {
-          currentUser = null;
-          $('appPanel').hidden = true;
-          $('authPanel').hidden = false;
-        }
-      });"""
+          old_bottom_listener = (
+              "      db.auth.onAuthStateChange((event, session) => {\n"
+              "        if (event === 'SIGNED_OUT' || !session) {\n"
+              "          currentUser = null;\n"
+              "          $('appPanel').hidden = true;\n"
+              "          $('authPanel').hidden = false;\n"
+              "        }\n"
+              "      });"
+          )
           if old_bottom_listener in app:
               app = app.replace(old_bottom_listener, "", 1)
 
-          old_session_branch = """      if (data?.session?.user) {
-        currentUser = data.session.user;
-        await afterLogin();
-      } else {"""
-          new_session_branch = """      if (data?.session?.user) {
-        currentUser = data.session.user;
-        const recoveryHash = new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery';
-        if (passwordRecoveryActive || recoveryHash) {
-          passwordRecoveryActive = true;
-          showPasswordRecoveryForm();
-        } else {
-          await afterLogin();
-        }
-      } else {"""
+          old_session_branch = (
+              "      if (data?.session?.user) {\n"
+              "        currentUser = data.session.user;\n"
+              "        await afterLogin();\n"
+              "      } else {"
+          )
+          new_session_branch = (
+              "      if (data?.session?.user) {\n"
+              "        currentUser = data.session.user;\n"
+              "        const recoveryHash = new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery';\n"
+              "        if (passwordRecoveryActive || recoveryHash) {\n"
+              "          passwordRecoveryActive = true;\n"
+              "          showPasswordRecoveryForm();\n"
+              "        } else {\n"
+              "          await afterLogin();\n"
+              "        }\n"
+              "      } else {"
+          )
           if new_session_branch not in app:
               if app.count(old_session_branch) != 1: raise SystemExit("Ramo sessione iniziale non trovato")
               app = app.replace(old_session_branch, new_session_branch, 1)
