@@ -767,7 +767,16 @@ jobs:
               document.addEventListener('visibilitychange', () => { if (document.hidden && stored()) lock(); });
               window.addEventListener('pagehide', () => { if (stored()) lock(); });
             }
-            render();
+            // Un link di recupero password Supabase è una sessione autenticata temporanea:
+            // non deve essere coperto dal PIN locale, altrimenti l'utente non può impostare la nuova password.
+            const recoveryLink = new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery'
+              || new URLSearchParams(window.location.search).has('code');
+            if (recoveryLink) {
+              unlocked = true;
+              overlay.style.display = 'none';
+            } else {
+              render();
+            }
           })();
           </script>"""
           if 'id="appSecurityOverlay"' not in html:
@@ -823,7 +832,7 @@ jobs:
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.26", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.27", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
