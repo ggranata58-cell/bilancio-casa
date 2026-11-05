@@ -254,6 +254,8 @@ jobs:
                   $('authPanel').hidden = false;
                 }
               });
+              const forceLogin = new URLSearchParams(window.location.search).get('access') === 'login';
+              if (forceLogin) await db.auth.signOut();
               const { data, error } = await db.auth.getSession();"""
           if "event === 'PASSWORD_RECOVERY'" not in app:
               if app.count(old_get) != 1: raise SystemExit("Inizializzazione sessione non trovata")
@@ -771,7 +773,8 @@ jobs:
             // non deve essere coperto dal PIN locale, altrimenti l'utente non può impostare la nuova password.
             const recoveryLink = new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery'
               || new URLSearchParams(window.location.search).has('code');
-            if (recoveryLink) {
+            const forceLogin = new URLSearchParams(window.location.search).get('access') === 'login';
+            if (recoveryLink || forceLogin) {
               unlocked = true;
               overlay.style.display = 'none';
             } else {
