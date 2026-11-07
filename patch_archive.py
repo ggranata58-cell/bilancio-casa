@@ -269,7 +269,7 @@ replace_once(
 "render cash summary")
 
 replace_once(
-"    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro'\n  ];\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';",
+"    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro', 'Rimborso'\n  ];\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';",
 "    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro',\n    'Movimenti esclusi', 'Prelievo contanti'\n  ];\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';\n  const EXCLUDED_CATEGORIES = new Set(['Movimenti esclusi', 'Prelievo contanti']);\n  function isExcludedMovement(m) { return EXCLUDED_CATEGORIES.has(m.category); }",
 "excluded movement categories")
 replace_once(
