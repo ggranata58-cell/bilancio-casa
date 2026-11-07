@@ -269,7 +269,7 @@ replace_once(
 "render cash summary")
 
 replace_once(
-"    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro', 'Rimborso'\n  ];\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';",
+"    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro', 'Rimborso',\n    'Movimenti esclusi', 'Prelievo contanti'\n  ];\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';\n  const EXCLUDED_CATEGORIES = new Set(['Movimenti esclusi', 'Prelievo contanti']);\n  function isExcludedMovement(m) { return EXCLUDED_CATEGORIES.has(m.category); }",
 "    'Finanz. Pannelli solari', 'Pensione', 'Imposte e tasse', 'Banca', 'Contanti', 'Altro',\n    'Movimenti esclusi', 'Prelievo contanti'\n  ];\n  const SPECIAL_CATEGORY = 'Tasas y Intereses';\n  const EXCLUDED_CATEGORIES = new Set(['Movimenti esclusi', 'Prelievo contanti']);\n  function isExcludedMovement(m) { return EXCLUDED_CATEGORIES.has(m.category); }",
 "excluded movement categories")
 replace_once(
@@ -338,6 +338,8 @@ try:
         patched = check.read(target).decode("utf-8")
         if "withStableId" not in patched or "ID movimento" not in patched:
             raise SystemExit("Patch verification failed.")
+        if "'Rimborso'" not in patched or "function isExcludedMovement(m)" not in patched:
+            raise SystemExit("Refund category / excluded movement helper verification failed.")
         category_loop_ok = False
         search_from = 0
         while True:
