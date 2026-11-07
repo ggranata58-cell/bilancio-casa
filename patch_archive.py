@@ -170,6 +170,15 @@ replace_once(
     const monthTotal = monthMovements(ym).filter(isCashWithdrawal).reduce((sum, m) => sum + Number(m.amount || 0), 0);
     const allTotal = movements.filter(m => inAccountingPeriod(m) && isCashWithdrawal(m)).reduce((sum, m) => sum + Number(m.amount || 0), 0);
     $('cashBalanceInput').value = readCashBalance().toFixed(2);
+    const taxReserveValue = $('statTaxReserve');
+    if (taxReserveValue) {
+      const taxReserveCard = taxReserveValue.closest('.stat-card');
+      const taxReserveLabel = taxReserveCard?.querySelector('.stat-label');
+      const taxReserveCaption = taxReserveCard?.querySelector('.stat-caption');
+      if (taxReserveLabel) taxReserveLabel.textContent = 'Contanti a disposizione';
+      taxReserveValue.textContent = money(readCashBalance());
+      if (taxReserveCaption) taxReserveCaption.textContent = 'Saldo contanti disponibile';
+    }
     $('cashMonthWithdrawals').textContent = money(monthTotal);
     $('cashTotalWithdrawals').textContent = money(allTotal);
     const status = $('cashSyncStatus');
