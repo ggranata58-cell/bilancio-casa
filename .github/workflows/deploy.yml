@@ -541,10 +541,10 @@ jobs:
                   raise SystemExit(f"Patch contabile {label}: attesa una corrispondenza, trovate {count}")
               app = app.replace(old, new, 1)
 
-          savings_lines = re.findall(r"^\\s*const monthlySavings = .*;$", app, flags=re.M)
+          savings_lines = re.findall(r"^\s*const monthlySavings = .*;$", app, flags=re.M)
           if len(savings_lines) != 1:
               raise SystemExit(f"Calcolo risparmio non trovato in modo univoco: {len(savings_lines)}")
-          app = re.sub(r"^\\s*const monthlySavings = .*;$", "              const monthlySavings = Math.round((budgetAllocated - expenses + Number.EPSILON) * 100) / 100;", app, count=1, flags=re.M)
+          app = re.sub(r"^\s*const monthlySavings = .*;$", "              const monthlySavings = Math.round((budgetAllocated - expenses + Number.EPSILON) * 100) / 100;", app, count=1, flags=re.M)
 
           category_start = app.index("  function categoryStatsForRows(rows) {")
           category_end = app.index("\n  const CASH_BALANCE_KEY_PREFIX", category_start)
