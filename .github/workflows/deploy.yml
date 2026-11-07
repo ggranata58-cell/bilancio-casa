@@ -533,17 +533,18 @@ jobs:
                   "    const refundTotal = rows.filter(m => m.movement_type === 'Entrata' && m.category === 'Rimborso').reduce((s, m) => s + m.amount, 0);\n    const expenses = Math.round((ordinaryOutflows - interestCredits - refundTotal + Number.EPSILON) * 100) / 100;",
                   "detrazione rimborsi dalle spese"
               ),
-              (
-                  "              const cashWithdrawals = rows.filter(m => m.movement_date <= cutoff && m.movement_type === 'Uscita' && m.category === 'Prelievo contanti').reduce((s, m) => s + m.amount, 0);\n              const monthlySavings = Math.round((budgetAllocated - expenses - cashWithdrawals + Number.EPSILON) * 100) / 100;",
-                  "              const monthlySavings = Math.round((budgetAllocated - expenses + Number.EPSILON) * 100) / 100;",
-                  "risparmio senza prelievi contanti"
-              )
+
           ]
           for old, new, label in accounting_replacements:
               count = app.count(old)
               if count != 1:
                   raise SystemExit(f"Patch contabile {label}: attesa una corrispondenza, trovate {count}")
               app = app.replace(old, new, 1)
+
+          savings_lines = re.findall(r"^\\s*const monthlySavings = .*;$", app, flags=re.M)
+          if len(savings_lines) != 1:
+              raise SystemExit(f"Calcolo risparmio non trovato in modo univoco: {len(savings_lines)}")
+          app = re.sub(r"^\\s*const monthlySavings = .*;$", "              const monthlySavings = Math.round((budgetAllocated - expenses + Number.EPSILON) * 100) / 100;", app, count=1, flags=re.M)
 
           category_start = app.index("  function categoryStatsForRows(rows) {")
           category_end = app.index("\n  const CASH_BALANCE_KEY_PREFIX", category_start)
