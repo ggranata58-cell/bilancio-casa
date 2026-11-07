@@ -515,6 +515,65 @@ jobs:
               if savings_render_anchor not in app:
                   raise SystemExit("Punto di visualizzazione dashboard non trovato")
               app = app.replace(savings_render_anchor, savings_render_patch, 1)
+          # Regole contabili concordate: rimborsi non sono entrate; imposte e prelievi
+          # non entrano nelle spese ordinarie; i rimborsi riducono la categoria originaria.
+          accounting_replacements = [
+              (
+                  "    const income = rows.filter(m => m.movement_type === 'Entrata').reduce((s, m) => s + m.amount, 0);",
+                  "    const income = rows.filter(m => m.movement_type === 'Entrata' && m.category !== 'Rimborso').reduce((s, m) => s + m.amount, 0);",
+                  "entrate senza rimborsi"
+              ),
+              (
+                  "    const ordinaryOutflows = rows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m)).reduce((s, m) => s + m.amount, 0);",
+                  "    const ordinaryOutflows = rows.filter(m => m.movement_type === 'Uscita' && !isExcludedMovement(m) && m.category !== 'Imposte e tasse').reduce((s, m) => s + m.amount, 0);",
+                  "spese senza imposte e categorie escluse"
+              ),
+              (
+                  "    const expenses = Math.round((ordinaryOutflows - interestCredits + Number.EPSILON) * 100) / 100;",
+                  "    const refundTotal = rows.filter(m => m.movement_type === 'Entrata' && m.category === 'Rimborso').reduce((s, m) => s + m.amount, 0);\n    const expenses = Math.round((ordinaryOutflows - interestCredits - refundTotal + Number.EPSILON) * 100) / 100;",
+                  "detrazione rimborsi dalle spese"
+              ),
+              (
+                  "              const cashWithdrawals = rows.filter(m => m.movement_date <= cutoff && m.movement_type === 'Uscita' && m.category === 'Prelievo contanti').reduce((s, m) => s + m.amount, 0);\n              const monthlySavings = Math.round((budgetAllocated - expenses - cashWithdrawals + Number.EPSILON) * 100) / 100;",
+                  "              const monthlySavings = Math.round((budgetAllocated - expenses + Number.EPSILON) * 100) / 100;",
+                  "risparmio senza prelievi contanti"
+              )
+          ]
+          for old, new, label in accounting_replacements:
+              count = app.count(old)
+              if count != 1:
+                  raise SystemExit(f"Patch contabile {label}: attesa una corrispondenza, trovate {count}")
+              app = app.replace(old, new, 1)
+
+          category_start = app.index("  function categoryStatsForRows(rows) {")
+          category_end = app.index("\n  const CASH_BALANCE_KEY_PREFIX", category_start)
+          category_function = """  function categoryStatsForRows(rows) {
+              const totals = new Map(CATEGORIES.map(c => [c, 0]));
+              for (const m of rows) {
+                if (isExcludedMovement(m) || m.category === 'Imposte e tasse') continue;
+                if (m.movement_type === 'Entrata' && m.category === 'Rimborso') {
+                  const prefix = 'Rimborso ';
+                  const originalCategory = String(m.concept || '').startsWith(prefix) ? String(m.concept).slice(prefix.length).trim() : '';
+                  if (originalCategory && totals.has(originalCategory)) {
+                    totals.set(originalCategory, (totals.get(originalCategory) || 0) - m.amount);
+                  }
+                } else if (m.category === 'Interessi attivi') {
+                  totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));
+                } else if (m.category === SPECIAL_CATEGORY) {
+                  totals.set(m.category, (totals.get(m.category) || 0) + (m.movement_type === 'Uscita' ? m.amount : -m.amount));
+                } else if (m.movement_type === 'Uscita') {
+                  totals.set(m.category, (totals.get(m.category) || 0) + m.amount);
+                }
+              }
+              return [...totals.entries()].map(([category, total]) => ({ category, total })).filter(x => Math.abs(x.total) >= 0.005).sort((a, b) => b.total - a.total);
+            }
+
+          """
+          app = app[:category_start] + category_function + app[category_end:]
+          # Verifica esplicita delle regole prima di scrivere il file pubblicato.
+          for required in ["m.category !== 'Rimborso'", "m.category !== 'Imposte e tasse'", "ordinaryOutflows - interestCredits - refundTotal", "budgetAllocated - expenses", "originalCategory"]:
+              if required not in app:
+                  raise SystemExit(f"Verifica regole contabili fallita: {required}")
           app_path.write_text(app, encoding="utf-8")
 
           html_path = root / "index.html"
@@ -851,7 +910,7 @@ jobs:
 
           sw_path = root / "service-worker.js"
           sw = sw_path.read_text(encoding="utf-8")
-          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.28", sw)
+          sw, changed = re.subn(r"bilancio-casa-shell-v0\.2\.\d+", "bilancio-casa-shell-v0.2.29", sw)
           if changed == 0:
               raise SystemExit("Versione cache service worker non trovata")
           sw_path.write_text(sw, encoding="utf-8")
